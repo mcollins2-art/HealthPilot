@@ -23,6 +23,30 @@ public class ProgramStartupTests
     }
 
     [Fact]
+    public void Startup_Throws_WhenRateLimitConfigurationInvalid()
+    {
+        var previous = Environment.GetEnvironmentVariable("Security__ApiKey");
+        try
+        {
+            Environment.SetEnvironmentVariable("Security__ApiKey", "test-key");
+
+            using var factory = new StartupWebFactory(
+                environmentName: Environments.Production,
+                extraConfig: new Dictionary<string, string?>
+                {
+                    ["RateLimiting:PermitLimit"] = "0"
+                });
+
+            var ex = Assert.Throws<InvalidOperationException>(() => factory.CreateClient());
+            Assert.Contains("RateLimiting configuration is invalid", ex.Message);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("Security__ApiKey", previous);
+        }
+    }
+
+    [Fact]
     public void Production_Starts_WhenLegacyApiKeyConfigured()
     {
         var previous = Environment.GetEnvironmentVariable("Security__ApiKey");

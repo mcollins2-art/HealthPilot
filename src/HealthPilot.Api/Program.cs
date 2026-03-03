@@ -11,6 +11,17 @@ using System.Threading.RateLimiting;
 var builder = WebApplication.CreateBuilder(args);
 
 var maxRequestBodyBytes = builder.Configuration.GetValue<long?>("Security:MaxRequestBodyBytes") ?? 1_048_576;
+if (maxRequestBodyBytes <= 0)
+{
+    throw new InvalidOperationException("Security:MaxRequestBodyBytes must be greater than 0.");
+}
+
+var defaultConnection = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(defaultConnection))
+{
+    throw new InvalidOperationException("ConnectionStrings:DefaultConnection must be configured.");
+}
+
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.Limits.MaxRequestBodySize = maxRequestBodyBytes;
@@ -29,7 +40,7 @@ if (!builder.Environment.IsDevelopment()
 // Register the PostgreSQL EF Core DbContext. This is the main persistence
 // boundary for the API and can be tuned further for pooling and resiliency.
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(defaultConnection));
 
 // Service registrations keep pricing retrieval and benefit logic separated.
 builder.Services.AddScoped<IPricingQueryService, PricingQueryService>();
@@ -53,6 +64,10 @@ builder.Services.AddRateLimiter(options =>
     var permitLimit = builder.Configuration.GetValue<int?>("RateLimiting:PermitLimit") ?? 120;
     var windowSeconds = builder.Configuration.GetValue<int?>("RateLimiting:WindowSeconds") ?? 60;
     var queueLimit = builder.Configuration.GetValue<int?>("RateLimiting:QueueLimit") ?? 0;
+    if (permitLimit <= 0 || windowSeconds <= 0 || queueLimit < 0)
+    {
+        throw new InvalidOperationException("RateLimiting configuration is invalid. PermitLimit and WindowSeconds must be greater than 0 and QueueLimit must be >= 0.");
+    }
 
     options.AddFixedWindowLimiter("api", limiterOptions =>
     {
