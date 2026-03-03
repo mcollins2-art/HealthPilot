@@ -22,8 +22,11 @@ public class ProgramStartupTests
         Assert.Contains("Security:ApiKey or Security:ApiKeys must be configured", ex.Message);
     }
 
-    [Fact]
-    public void Startup_Throws_WhenRateLimitConfigurationInvalid()
+    [Theory]
+    [InlineData("RateLimiting:PermitLimit", "0", "RateLimiting:PermitLimit must be greater than 0")]
+    [InlineData("RateLimiting:WindowSeconds", "0", "RateLimiting:WindowSeconds must be greater than 0")]
+    [InlineData("RateLimiting:QueueLimit", "-1", "RateLimiting:QueueLimit must be greater than or equal to 0")]
+    public void Startup_Throws_WhenRateLimitConfigurationInvalid(string key, string value, string expectedMessage)
     {
         var previous = Environment.GetEnvironmentVariable("Security__ApiKey");
         try
@@ -34,11 +37,11 @@ public class ProgramStartupTests
                 environmentName: Environments.Production,
                 extraConfig: new Dictionary<string, string?>
                 {
-                    ["RateLimiting:PermitLimit"] = "0"
+                    [key] = value
                 });
 
             var ex = Assert.Throws<InvalidOperationException>(() => factory.CreateClient());
-            Assert.Contains("RateLimiting configuration is invalid", ex.Message);
+            Assert.Contains(expectedMessage, ex.Message);
         }
         finally
         {

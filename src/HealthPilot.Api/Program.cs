@@ -64,9 +64,19 @@ builder.Services.AddRateLimiter(options =>
     var permitLimit = builder.Configuration.GetValue<int?>("RateLimiting:PermitLimit") ?? 120;
     var windowSeconds = builder.Configuration.GetValue<int?>("RateLimiting:WindowSeconds") ?? 60;
     var queueLimit = builder.Configuration.GetValue<int?>("RateLimiting:QueueLimit") ?? 0;
-    if (permitLimit <= 0 || windowSeconds <= 0 || queueLimit < 0)
+    if (permitLimit <= 0)
     {
-        throw new InvalidOperationException("RateLimiting configuration is invalid. PermitLimit and WindowSeconds must be greater than 0 and QueueLimit must be >= 0.");
+        throw new InvalidOperationException("RateLimiting:PermitLimit must be greater than 0");
+    }
+
+    if (windowSeconds <= 0)
+    {
+        throw new InvalidOperationException("RateLimiting:WindowSeconds must be greater than 0");
+    }
+
+    if (queueLimit < 0)
+    {
+        throw new InvalidOperationException("RateLimiting:QueueLimit must be greater than or equal to 0");
     }
 
     options.AddFixedWindowLimiter("api", limiterOptions =>
