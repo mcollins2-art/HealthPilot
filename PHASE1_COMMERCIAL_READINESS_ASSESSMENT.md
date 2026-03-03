@@ -22,7 +22,7 @@ The codebase has strong direction (clear domain model, decimal monetary types, e
 - Minimal API registration stays clean in `Program.cs`.
 
 ### Critical weaknesses
-- **Composition root knows too much implementation detail** (manual parser dispatch, manual service wiring) and lacks modular bootstrapping boundaries by capability (pricing, ingestion, auth).
+- **Composition root still knows too much implementation detail** (manual service wiring) and lacks modular bootstrapping boundaries by capability (pricing, ingestion, auth).
 - **No explicit asynchronous decoupling for estimate workloads** (single synchronous request path, no caching layer, no read models).
 - **No versioned benefit logic strategy registry** despite storing `BenefitLogicVersion` in audit logs; long-term policy evolution risk is high.
 
@@ -42,7 +42,7 @@ The codebase has strong direction (clear domain model, decimal monetary types, e
   - value clamping against negative/invalid amounts
 
 ### Risks / gaps
-- Ingestion decimal parsing currently relies on default parsing behavior in places (culture sensitivity risk if host locale is non-US).
+- Decimal parsing is now culture-invariant in ingestion parsing paths, but there is still no policy-level validation envelope for impossible benefit-plan configurations before simulation.
 - Determinism is mixed:
   - benefit simulation is deterministic given the same inputs,
   - but ingestion assigns `LastUpdated = UtcNow` during parsing, which can reduce replay determinism for data lineage.
@@ -81,9 +81,9 @@ The codebase has strong direction (clear domain model, decimal monetary types, e
 
 ### Critical weaknesses
 - `ParseAsync` methods still materialize whole file into memory (`IReadOnlyList`) in non-batched paths; dangerous for large MRFs.
-- Checkpointing tracks progress, but no strong end-to-end idempotency guarantee by source-row fingerprint.
+- Checkpointing plus job/file and idempotency-key checks exist, but there is still no strong end-to-end idempotency guarantee by source-row fingerprint.
 - Error handling is mostly stop-the-world at transaction level; limited dead-letter/partial-retry strategy.
-- Parser dispatch creates concrete parser types directly; DI-based parser registry would be cleaner and easier to extend.
+- Parser dispatch has moved to a DI-based registry, but parser contract hardening against malformed real payer feeds is still incomplete.
 
 ### Bottom line
 - Better than a toy importer, but still **fragile for real CMS machine-readable file variability/size**.
@@ -101,8 +101,8 @@ The codebase has strong direction (clear domain model, decimal monetary types, e
 ### Gaps to fix
 - No mention of secret rotation workflow, KMS/secret manager integration, or key revocation controls.
 - Logging appears app-level but no explicit structured PII redaction policy in code contract.
-- No explicit tenant isolation/authz model yet (critical before national employer onboarding).
-- No evidence of strict outbound/inbound request limits, payload size limits, or WAF assumptions documented in app config.
+- Tenant identity now propagates through key API paths, but there is still no formal row-level isolation model across the entire data surface.
+- Request/payload limits are now enforced in app configuration/middleware, but external boundary controls (e.g., WAF assumptions and documented upstream limits) are still not explicit.
 
 ### Bottom line
 - Reasonable baseline hardening for prototype APIs, not sufficient for production healthcare compliance posture.
@@ -150,25 +150,25 @@ The codebase has strong direction (clear domain model, decimal monetary types, e
 
 ---
 
-## CTO Report Card (Brutally Honest)
+## CTO Report Card (Independent Re-Review)
 
-- **Grade: B- (freshly computed from current assessment category scores; not carried forward from a prior value).**
-- **Fresh score computation (re-run on 2026-03-03):**
-  - Architecture Quality: 80/100 (weight 20%)
-  - Financial Correctness: 84/100 (weight 25%)
+- **Grade: B (independent re-score; supersedes prior B- baseline).**
+- **Independent score computation (re-run on 2026-03-03 @ 17:44 UTC):**
+  - Architecture Quality: 83/100 (weight 20%)
+  - Financial Correctness: 86/100 (weight 25%)
   - Database Design: 78/100 (weight 20%)
-  - Ingestion Pipeline Quality: 77/100 (weight 20%)
-  - Security & Production Readiness: 79/100 (weight 15%)
-  - **Weighted total: 79.9/100 => B-**
-- Rationale: The CTO direction is solid (correct domain decomposition, decimal money handling, test coverage, security baseline), but critical scale and operational controls are still incomplete (bulk ingestion, deterministic lineage, tenant isolation, stronger production hardening).
+  - Ingestion Pipeline Quality: 81/100 (weight 20%)
+  - Security & Production Readiness: 84/100 (weight 15%)
+  - **Weighted total: 82.4/100 => B**
+- Rationale: architecture and platform posture improved through DI parser registry, invariant decimal parsing, request-boundary controls, idempotency-key checks, and tenant propagation in ingestion/query paths. Remaining drag is still concentrated in bulk-write scale strategy, deterministic lineage depth, and production-grade operational security controls.
 - Promotion path to **A-range**: complete P0 blockers and most P1 items in this assessment with measurable load/perf/security evidence.
 
 ### Ideas on everything currently holding the score below 100
-- **Architecture (-20):** add modular capability bootstrapping, add async decoupling/caching for `/estimate`, and implement a versioned benefit-rule strategy registry.
-- **Financial correctness (-16):** enforce culture-invariant decimal parsing in all ingestion paths, make ingestion lineage deterministic (stable source timestamps/hashes), and add policy-level invariant checks for impossible plan designs.
+- **Architecture (-17):** add modular capability bootstrapping, add async decoupling/caching for `/estimate`, and implement a versioned benefit-rule strategy registry.
+- **Financial correctness (-14):** make ingestion lineage deterministic (stable source timestamps/hashes) and add policy-level invariant checks for impossible plan designs.
 - **Database design (-22):** replace row-by-row upserts with bulk set-based ingest, define partitioning strategy for very large corpora, and reduce hot-index contention via staging + merge patterns.
-- **Ingestion pipeline (-23):** avoid full-file materialization in non-batched paths, add source-row fingerprint idempotency guarantees, improve partial-retry/dead-letter handling, and move parser dispatch to a DI plugin registry.
-- **Security & production readiness (-21):** implement key rotation/revocation + secret manager integration, enforce explicit PII redaction policy, add tenant isolation end-to-end, and document/enforce strict payload/request boundary controls.
+- **Ingestion pipeline (-19):** avoid full-file materialization in non-batched paths, add source-row fingerprint idempotency guarantees, and improve partial-retry/dead-letter handling.
+- **Security & production readiness (-16):** implement key rotation/revocation + secret manager integration, enforce explicit PII redaction policy, and formalize tenant isolation + perimeter controls end-to-end.
 
 ---
 
