@@ -163,6 +163,13 @@ The codebase has strong direction (clear domain model, decimal monetary types, e
 - Rationale: The CTO direction is solid (correct domain decomposition, decimal money handling, test coverage, security baseline), but critical scale and operational controls are still incomplete (bulk ingestion, deterministic lineage, tenant isolation, stronger production hardening).
 - Promotion path to **A-range**: complete P0 blockers and most P1 items in this assessment with measurable load/perf/security evidence.
 
+### Ideas on everything currently holding the score below 100
+- **Architecture (-20):** add modular capability bootstrapping, add async decoupling/caching for `/estimate`, and implement a versioned benefit-rule strategy registry.
+- **Financial correctness (-16):** enforce culture-invariant decimal parsing in all ingestion paths, make ingestion lineage deterministic (stable source timestamps/hashes), and add policy-level invariant checks for impossible plan designs.
+- **Database design (-22):** replace row-by-row upserts with bulk set-based ingest, define partitioning strategy for very large corpora, and reduce hot-index contention via staging + merge patterns.
+- **Ingestion pipeline (-23):** avoid full-file materialization in non-batched paths, add source-row fingerprint idempotency guarantees, improve partial-retry/dead-letter handling, and move parser dispatch to a DI plugin registry.
+- **Security & production readiness (-21):** implement key rotation/revocation + secret manager integration, enforce explicit PII redaction policy, add tenant isolation end-to-end, and document/enforce strict payload/request boundary controls.
+
 ---
 
 ## A+ Range Implementation Plan (All Required Changes)
