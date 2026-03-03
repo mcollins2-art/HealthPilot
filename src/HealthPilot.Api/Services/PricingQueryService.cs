@@ -9,11 +9,13 @@ public class PricingQueryService(AppDbContext dbContext) : IPricingQueryService
         string zipCode,
         string insurer,
         string cptCode,
+        string? tenantId,
         CancellationToken cancellationToken)
     {
         string normalizedZip = zipCode.Trim();
         string normalizedInsurer = insurer.Trim();
         string normalizedCpt = cptCode.Trim().ToUpperInvariant();
+        string normalizedTenant = tenantId ?? string.Empty;
 
         // Resolve dimension keys once, then run fact-table queries on integer IDs.
         int? procedureId = await dbContext.Procedures
@@ -31,6 +33,7 @@ public class PricingQueryService(AppDbContext dbContext) : IPricingQueryService
         var facilityIds = await dbContext.Facilities
             .AsNoTracking()
             .Where(f => f.Zip == normalizedZip)
+            .Where(f => f.TenantId == normalizedTenant)
             .Select(f => f.Id)
             .ToListAsync(cancellationToken);
 

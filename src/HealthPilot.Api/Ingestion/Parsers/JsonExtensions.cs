@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 
 namespace HealthPilot.Api.Ingestion.Parsers;
@@ -26,6 +27,8 @@ internal static class JsonExtensions
             return n;
         }
 
-        return decimal.TryParse(value.ToString(), out decimal parsed) ? parsed : null;
+        return decimal.TryParse(value.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out decimal parsed)
+            ? parsed
+            : null;
     }
 }

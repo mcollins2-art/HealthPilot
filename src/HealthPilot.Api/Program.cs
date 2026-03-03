@@ -1,6 +1,7 @@
 using HealthPilot.Api.Data;
 using HealthPilot.Api.Endpoints;
 using HealthPilot.Api.Ingestion;
+using HealthPilot.Api.Ingestion.Parsers;
 using HealthPilot.Api.Middleware;
 using HealthPilot.Api.Services;
 using Microsoft.AspNetCore.RateLimiting;
@@ -8,6 +9,12 @@ using Microsoft.EntityFrameworkCore;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var maxRequestBodyBytes = builder.Configuration.GetValue<long?>("Security:MaxRequestBodyBytes") ?? 1_048_576;
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = maxRequestBodyBytes;
+});
 
 var hasLegacyApiKey = !string.IsNullOrWhiteSpace(builder.Configuration["Security:ApiKey"]);
 var hasScopedApiKeys = builder.Configuration.GetSection("Security:ApiKeys").GetChildren().Any();
@@ -31,6 +38,9 @@ builder.Services.AddScoped<IBenefitSimulationService, BenefitSimulationService>(
 builder.Services.AddScoped<IEstimateAuditService, EstimateAuditService>();
 builder.Services.AddScoped<IPricingPersistenceService, PricingPersistenceService>();
 builder.Services.AddScoped<IPricingLifecycleService, PricingLifecycleService>();
+builder.Services.AddScoped<IPricingParser, CmsCsvPricingParser>();
+builder.Services.AddScoped<IPricingParser, CmsJsonPricingParser>();
+builder.Services.AddScoped<IPricingParserRegistry, PricingParserRegistry>();
 builder.Services.AddScoped<PricingIngestionPipeline>();
 builder.Services.AddScoped<IIngestionCheckpointService, DbIngestionCheckpointService>();
 builder.Services.AddSingleton<IIngestionJobQueue, IngestionJobQueue>();

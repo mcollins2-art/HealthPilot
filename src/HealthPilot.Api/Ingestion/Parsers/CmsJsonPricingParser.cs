@@ -6,6 +6,8 @@ namespace HealthPilot.Api.Ingestion.Parsers;
 
 public class CmsJsonPricingParser : IPricingParser
 {
+    public IReadOnlyCollection<string> SupportedExtensions { get; } = [".json"];
+
     public async Task<IReadOnlyList<StructuredPricingRecord>> ParseAsync(string filePath, CancellationToken cancellationToken)
     {
         var sourceLastUpdated = File.GetLastWriteTimeUtc(filePath);

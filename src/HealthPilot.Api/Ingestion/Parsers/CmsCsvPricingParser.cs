@@ -5,6 +5,8 @@ namespace HealthPilot.Api.Ingestion.Parsers;
 
 public class CmsCsvPricingParser : IPricingParser
 {
+    public IReadOnlyCollection<string> SupportedExtensions { get; } = [".csv"];
+
     public Task<IReadOnlyList<StructuredPricingRecord>> ParseAsync(string filePath, CancellationToken cancellationToken)
     {
         var sourceLastUpdated = File.GetLastWriteTimeUtc(filePath);
@@ -45,12 +47,7 @@ public class CmsCsvPricingParser : IPricingParser
         return row.TryGetValue(key, out var value) ? value : fallback;
     }
 
-    private static decimal? ParseDecimal(string value)
-    {
-        return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed
-            : null;
-    }
+    private static decimal? ParseDecimal(string value) => Normalizers.ParseDecimalInvariantOrNull(value);
 
     private static DateTimeOffset? ParseDateTimeOffset(string value)
     {

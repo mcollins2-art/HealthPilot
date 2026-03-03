@@ -65,6 +65,7 @@ public sealed class IngestionJobWorker(
                 job.FilePath,
                 job.BatchSize,
                 job.ResumeFromCheckpoint,
+                job.TenantId,
                 cancellationToken);
 
             job.Status = "completed";

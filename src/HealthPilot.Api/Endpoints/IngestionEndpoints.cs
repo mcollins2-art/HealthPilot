@@ -162,6 +162,12 @@ public static class IngestionEndpoints
         }
 
         var fullPath = Path.GetFullPath(request.FilePath);
+        var tenantId = httpContext.Items.TryGetValue("TenantId", out var resolvedTenantId)
+            ? resolvedTenantId?.ToString()
+            : null;
+        var idempotencyKey = httpContext.Request.Headers.TryGetValue("X-Idempotency-Key", out var resolvedIdempotencyKey)
+            ? resolvedIdempotencyKey.ToString()
+            : null;
 
         var allowedRoot = configuration["Ingestion:AllowedRootPath"];
         if (!string.IsNullOrWhiteSpace(allowedRoot))
@@ -203,7 +209,7 @@ public static class IngestionEndpoints
         }
 
         var fileInfo = new FileInfo(fullPath);
-        const long maxImportBytes = 1_000_000_000; // 1GB
+        var maxImportBytes = configuration.GetValue<long?>("Ingestion:MaxImportBytes") ?? 1_000_000_000; // 1GB
         if (fileInfo.Length > maxImportBytes)
         {
             return Results.BadRequest(new ProblemDetails
@@ -224,9 +230,6 @@ public static class IngestionEndpoints
             var batchSize = request.BatchSize ?? configuration.GetValue<int?>("Ingestion:BatchSize") ?? 5000;
             var parserVersion = extension == ".csv" ? "cms_csv_v1" : "cms_json_v1";
             var hash = await ComputeFileHashAsync(fullPath, cancellationToken);
-            var tenantId = httpContext.Items.TryGetValue("TenantId", out var resolvedTenantId)
-                ? resolvedTenantId?.ToString()
-                : null;
 
             var existingJob = await dbContext.IngestionJobs
                 .AsNoTracking()
@@ -249,6 +252,30 @@ public static class IngestionEndpoints
                 });
             }
 
+            if (!string.IsNullOrWhiteSpace(idempotencyKey))
+            {
+                var duplicateByIdempotency = await dbContext.IngestionJobs
+                    .AsNoTracking()
+                    .Where(x => x.ReplayOfJobId == null)
+                    .Where(x => x.IdempotencyKey == idempotencyKey)
+                    .Where(x => x.TenantId == tenantId)
+                    .Where(x => x.Status == "queued" || x.Status == "in_progress" || x.Status == "completed")
+                    .OrderByDescending(x => x.CreatedAtUtc)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (duplicateByIdempotency is not null)
+                {
+                    return Results.Conflict(new ProblemDetails
+                    {
+                        Title = "Duplicate ingestion job",
+                        Detail = "An ingestion job for this idempotency key already exists for the current tenant.",
+                        Status = StatusCodes.Status409Conflict,
+                        Instance = httpContext.TraceIdentifier,
+                        Extensions = { ["jobId"] = duplicateByIdempotency.Id }
+                    });
+                }
+            }
+
             job = new IngestionJob
             {
                 CreatedAtUtc = DateTimeOffset.UtcNow,
@@ -262,7 +289,8 @@ public static class IngestionEndpoints
                 ParserVersion = parserVersion,
                 EffectiveStartUtc = request.EffectiveStartUtc,
                 EffectiveEndUtc = request.EffectiveEndUtc,
-                TenantId = tenantId
+                TenantId = tenantId,
+                IdempotencyKey = idempotencyKey
             };
 
             dbContext.IngestionJobs.Add(job);
@@ -285,6 +313,7 @@ public static class IngestionEndpoints
                 fullPath,
                 batchSize,
                 request.ResumeFromCheckpoint,
+                tenantId,
                 cancellationToken);
 
             job.Status = "completed";
@@ -381,7 +410,8 @@ public static class IngestionEndpoints
             ParserVersion = sourceJob.ParserVersion,
             EffectiveStartUtc = sourceJob.EffectiveStartUtc,
             EffectiveEndUtc = sourceJob.EffectiveEndUtc,
-            TenantId = sourceJob.TenantId
+            TenantId = sourceJob.TenantId,
+            IdempotencyKey = null
         };
 
         dbContext.IngestionJobs.Add(replayJob);

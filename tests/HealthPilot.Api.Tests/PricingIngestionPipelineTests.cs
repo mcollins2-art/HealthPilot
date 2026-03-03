@@ -1,6 +1,7 @@
 using HealthPilot.Api.Data;
 using HealthPilot.Api.Dtos;
 using HealthPilot.Api.Ingestion;
+using HealthPilot.Api.Ingestion.Parsers;
 using HealthPilot.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -23,10 +24,10 @@ public class PricingIngestionPipelineTests : IDisposable
         using var dbContext = CreateDbContext();
         var persistence = new FakePricingPersistenceService();
         var checkpoints = new FakeCheckpointService();
-        var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+        var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints, new PricingParserRegistry([new CmsCsvPricingParser(), new CmsJsonPricingParser()]));
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            pipeline.ImportFileWithBatchingAsync("input.csv", 0, resumeFromCheckpoint: false, CancellationToken.None));
+            pipeline.ImportFileWithBatchingAsync("input.csv", 0, resumeFromCheckpoint: false, tenantId: null, CancellationToken.None));
     }
 
     [Fact]
@@ -35,10 +36,10 @@ public class PricingIngestionPipelineTests : IDisposable
         using var dbContext = CreateDbContext();
         var persistence = new FakePricingPersistenceService();
         var checkpoints = new FakeCheckpointService();
-        var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+        var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints, new PricingParserRegistry([new CmsCsvPricingParser(), new CmsJsonPricingParser()]));
 
         await Assert.ThrowsAsync<NotSupportedException>(() =>
-            pipeline.ImportFileWithBatchingAsync("input.txt", 100, resumeFromCheckpoint: false, CancellationToken.None));
+            pipeline.ImportFileWithBatchingAsync("input.txt", 100, resumeFromCheckpoint: false, tenantId: null, CancellationToken.None));
     }
 
     [Fact]
@@ -71,7 +72,7 @@ public class PricingIngestionPipelineTests : IDisposable
         """);
 
         using var dbContext = CreateDbContext();
-        var pipeline = new PricingIngestionPipeline(dbContext, new FakePricingPersistenceService(), new FakeCheckpointService());
+        var pipeline = new PricingIngestionPipeline(dbContext, new FakePricingPersistenceService(), new FakeCheckpointService(), new PricingParserRegistry([new CmsCsvPricingParser(), new CmsJsonPricingParser()]));
 
         var csvRecords = await pipeline.ParseAsync(csvPath, CancellationToken.None);
         var jsonRecords = await pipeline.ParseAsync(jsonPath, CancellationToken.None);
@@ -91,7 +92,7 @@ public class PricingIngestionPipelineTests : IDisposable
         await File.WriteAllTextAsync(filePath, "irrelevant");
 
         using var dbContext = CreateDbContext();
-        var pipeline = new PricingIngestionPipeline(dbContext, new FakePricingPersistenceService(), new FakeCheckpointService());
+        var pipeline = new PricingIngestionPipeline(dbContext, new FakePricingPersistenceService(), new FakeCheckpointService(), new PricingParserRegistry([new CmsCsvPricingParser(), new CmsJsonPricingParser()]));
 
         await Assert.ThrowsAsync<NotSupportedException>(() => pipeline.ParseAsync(filePath, CancellationToken.None));
     }
@@ -109,9 +110,9 @@ public class PricingIngestionPipelineTests : IDisposable
         using var dbContext = CreateDbContext();
         var persistence = new FakePricingPersistenceService();
         var checkpoints = new FakeCheckpointService();
-        var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+        var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints, new PricingParserRegistry([new CmsCsvPricingParser(), new CmsJsonPricingParser()]));
 
-        var result = await pipeline.ImportFileWithBatchingAsync(filePath, 1, resumeFromCheckpoint: false, CancellationToken.None);
+        var result = await pipeline.ImportFileWithBatchingAsync(filePath, 1, resumeFromCheckpoint: false, tenantId: null, CancellationToken.None);
 
         Assert.True(result.Completed);
         Assert.Equal(3, result.RowsProcessed);
@@ -167,9 +168,9 @@ public class PricingIngestionPipelineTests : IDisposable
         using var dbContext = CreateDbContext();
         var persistence = new FakePricingPersistenceService();
         var checkpoints = new FakeCheckpointService(initialRowsProcessed: 1);
-        var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+        var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints, new PricingParserRegistry([new CmsCsvPricingParser(), new CmsJsonPricingParser()]));
 
-        var result = await pipeline.ImportFileWithBatchingAsync(filePath, 50, resumeFromCheckpoint: true, CancellationToken.None);
+        var result = await pipeline.ImportFileWithBatchingAsync(filePath, 50, resumeFromCheckpoint: true, tenantId: null, CancellationToken.None);
 
         Assert.True(result.Completed);
         Assert.Equal(1, result.RowsResumedFrom);
@@ -193,9 +194,9 @@ public class PricingIngestionPipelineTests : IDisposable
                 using var dbContext = CreateDbContext();
                 var persistence = new FakePricingPersistenceService();
                 var checkpoints = new FakeCheckpointService(initialRowsProcessed: 2);
-                var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+                var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints, new PricingParserRegistry([new CmsCsvPricingParser(), new CmsJsonPricingParser()]));
 
-                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: true, CancellationToken.None);
+                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: true, tenantId: null, CancellationToken.None);
 
                 Assert.True(result.Completed);
                 Assert.Equal(2, result.RowsResumedFrom);
@@ -217,9 +218,9 @@ public class PricingIngestionPipelineTests : IDisposable
                 using var dbContext = CreateDbContext();
                 var persistence = new FakePricingPersistenceService();
                 var checkpoints = new FakeCheckpointService(initialRowsProcessed: 9);
-                var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+                var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints, new PricingParserRegistry([new CmsCsvPricingParser(), new CmsJsonPricingParser()]));
 
-                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: false, CancellationToken.None);
+                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: false, tenantId: null, CancellationToken.None);
 
                 Assert.True(result.Completed);
                 Assert.Equal(0, result.RowsResumedFrom);
@@ -268,9 +269,9 @@ public class PricingIngestionPipelineTests : IDisposable
                 using var dbContext = CreateDbContext();
                 var persistence = new FakePricingPersistenceService();
                 var checkpoints = new FakeCheckpointService();
-                var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+                var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints, new PricingParserRegistry([new CmsCsvPricingParser(), new CmsJsonPricingParser()]));
 
-                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 1, resumeFromCheckpoint: true, CancellationToken.None);
+                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 1, resumeFromCheckpoint: true, tenantId: null, CancellationToken.None);
 
                 Assert.True(result.Completed);
                 Assert.Equal(2, result.RowsProcessed);
@@ -289,9 +290,9 @@ public class PricingIngestionPipelineTests : IDisposable
                 using var dbContext = CreateDbContext();
                 var persistence = new FakePricingPersistenceService();
                 var checkpoints = new FakeCheckpointService();
-                var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+                var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints, new PricingParserRegistry([new CmsCsvPricingParser(), new CmsJsonPricingParser()]));
 
-                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: true, CancellationToken.None);
+                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: true, tenantId: null, CancellationToken.None);
 
                 Assert.True(result.Completed);
                 Assert.Single(persistence.Calls);
@@ -343,9 +344,9 @@ public class PricingIngestionPipelineTests : IDisposable
                 using var dbContext = CreateDbContext();
                 var persistence = new FakePricingPersistenceService();
                 var checkpoints = new FakeCheckpointService(initialRowsProcessed: 5);
-                var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+                var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints, new PricingParserRegistry([new CmsCsvPricingParser(), new CmsJsonPricingParser()]));
 
-                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: false, CancellationToken.None);
+                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: false, tenantId: null, CancellationToken.None);
 
                 Assert.True(result.Completed);
                 Assert.Equal(0, result.RowsResumedFrom);
@@ -363,7 +364,7 @@ public class PricingIngestionPipelineTests : IDisposable
         using var dbContext = CreateDbContext();
         var persistence = new FakePricingPersistenceService();
         var checkpoints = new FakeCheckpointService();
-        var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+        var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints, new PricingParserRegistry([new CmsCsvPricingParser(), new CmsJsonPricingParser()]));
 
         var input = new List<StructuredPricingRecord>
         {

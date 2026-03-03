@@ -15,7 +15,7 @@ public class PricingQueryServiceTests
         await SeedFacilityAsync(fixture.DbContext, "10001");
 
         var service = new PricingQueryService(fixture.DbContext);
-        var summary = await service.GetPricingSummaryAsync("10001", "Aetna", "70551", CancellationToken.None);
+        var summary = await service.GetPricingSummaryAsync("10001", "Aetna", "70551", null, CancellationToken.None);
 
         Assert.Null(summary.NegotiatedMin);
         Assert.Null(summary.NegotiatedMax);
@@ -33,7 +33,7 @@ public class PricingQueryServiceTests
         await fixture.DbContext.SaveChangesAsync();
 
         var service = new PricingQueryService(fixture.DbContext);
-        var summary = await service.GetPricingSummaryAsync("99999", "Aetna", "70551", CancellationToken.None);
+        var summary = await service.GetPricingSummaryAsync("99999", "Aetna", "70551", null, CancellationToken.None);
 
         Assert.Null(summary.NegotiatedMin);
         Assert.Null(summary.NegotiatedMax);
@@ -59,7 +59,7 @@ public class PricingQueryServiceTests
         await fixture.DbContext.SaveChangesAsync();
 
         var service = new PricingQueryService(fixture.DbContext);
-        var summary = await service.GetPricingSummaryAsync("10001", "Unknown Insurer", "70551", CancellationToken.None);
+        var summary = await service.GetPricingSummaryAsync("10001", "Unknown Insurer", "70551", null, CancellationToken.None);
 
         Assert.Null(summary.NegotiatedMin);
         Assert.Null(summary.NegotiatedMax);
@@ -92,7 +92,7 @@ public class PricingQueryServiceTests
         await fixture.DbContext.SaveChangesAsync();
 
         var service = new PricingQueryService(fixture.DbContext);
-        var summary = await service.GetPricingSummaryAsync(" 10001 ", " Aetna ", "70551", CancellationToken.None);
+        var summary = await service.GetPricingSummaryAsync(" 10001 ", " Aetna ", "70551", null, CancellationToken.None);
 
         Assert.Equal(950m, summary.NegotiatedMin);
         Assert.Equal(1100m, summary.NegotiatedMax);

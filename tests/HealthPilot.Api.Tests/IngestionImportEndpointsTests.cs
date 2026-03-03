@@ -251,6 +251,64 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Import_ReturnsConflict_WhenDuplicateIdempotencyKeySubmitted()
+    {
+        var csvA = Path.Combine(_tempDirectory, "dup-key-a.csv");
+        await File.WriteAllTextAsync(csvA,
+            "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price\n" +
+            "70551,Brain MRI,imaging,Test Hospital,hospital,Hoboken,NJ,07030,Plan A,1200,contracted,950");
+
+        var csvB = Path.Combine(_tempDirectory, "dup-key-b.csv");
+        await File.WriteAllTextAsync(csvB,
+            "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price\n" +
+            "70450,Head CT,imaging,Metro Clinic,clinic,Jersey City,NJ,07302,Plan B,900,contracted,700");
+
+        _client.DefaultRequestHeaders.Remove("X-Idempotency-Key");
+        _client.DefaultRequestHeaders.Add("X-Idempotency-Key", "same-key");
+
+        var first = await _client.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
+        {
+            FilePath = csvA,
+            BatchSize = 100,
+            ResumeFromCheckpoint = false
+        });
+
+        first.EnsureSuccessStatusCode();
+
+        var second = await _client.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
+        {
+            FilePath = csvB,
+            BatchSize = 100,
+            ResumeFromCheckpoint = false
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+        var problem = await second.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("Duplicate ingestion job", problem!.Title);
+    }
+
+    [Fact]
+    public async Task Import_ReturnsPayloadTooLarge_WhenRequestBodyExceedsConfiguredLimit()
+    {
+        using var limitedFactory = CreateFactory(new Dictionary<string, string?>
+        {
+            ["Security:MaxRequestBodyBytes"] = "64"
+        });
+        using var limitedClient = limitedFactory.CreateClient();
+        limitedClient.DefaultRequestHeaders.Add("X-API-Key", "ingestion-key");
+
+        var response = await limitedClient.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
+        {
+            FilePath = Path.Combine(_tempDirectory, new string('a', 256)),
+            BatchSize = 100,
+            ResumeFromCheckpoint = false
+        });
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Replay_ReturnsAccepted_ForExistingJob()
     {
         var csv = Path.Combine(_tempDirectory, "replay.csv");
