@@ -53,6 +53,7 @@ public static class EstimateEndpoints
 
         var response = new EstimateResponse
         {
+            ProcedureDescription = pricing.ProcedureDescription,
             NegotiatedRateMin = pricing.NegotiatedMin,
             NegotiatedRateMax = pricing.NegotiatedMax,
             NegotiatedRateRange = pricingQueryService.FormatRange(pricing.NegotiatedMin, pricing.NegotiatedMax),

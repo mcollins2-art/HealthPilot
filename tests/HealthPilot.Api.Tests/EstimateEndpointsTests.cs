@@ -38,6 +38,7 @@ public class EstimateEndpointsTests
 
         response.EnsureSuccessStatusCode();
         var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Brain MRI", payload.GetProperty("procedureDescription").GetString());
         Assert.Equal(100m, payload.GetProperty("negotiatedRateMin").GetDecimal());
         Assert.Equal(200m, payload.GetProperty("negotiatedRateMax").GetDecimal());
         Assert.Equal("$100.00 - $200.00", payload.GetProperty("negotiatedRateRange").GetString());
@@ -109,7 +110,7 @@ public class EstimateEndpointsTests
     {
         public Task<PricingSummary> GetPricingSummaryAsync(string zipCode, string insurer, string cptCode, CancellationToken cancellationToken)
         {
-            return Task.FromResult(new PricingSummary(100m, 200m, 80m, 160m));
+            return Task.FromResult(new PricingSummary(100m, 200m, 80m, 160m, "Brain MRI"));
         }
 
         public string FormatRange(decimal? minValue, decimal? maxValue)
