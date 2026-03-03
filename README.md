@@ -15,7 +15,6 @@ This is the canonical backend for HealthPilot.
 ## Run
 
 ```powershell
-cd backend
 dotnet restore
 dotnet ef database update --project .\src\HealthPilot.Api\HealthPilot.Api.csproj --startup-project .\src\HealthPilot.Api\HealthPilot.Api.csproj
 dotnet run --project .\src\HealthPilot.Api\HealthPilot.Api.csproj --urls "http://localhost:5050"
@@ -64,7 +63,6 @@ Example scoped key config:
 Example:
 
 ```powershell
-cd backend
 .\scripts\loadtest\Run-EstimatePerfSmoke.ps1 -BaseUrl "http://localhost:5000" -TotalRequests 500 -Concurrency 50 -OutFile ".\scripts\loadtest\last-estimate-perf.json"
 ```
 
@@ -77,13 +75,12 @@ cd backend
 ## Structure
 
 ```text
-backend/
-  src/
-    HealthPilot.Api/
-      Models/
-      Data/
-      Dtos/
-      Services/
-      Ingestion/
-      Endpoints/
+src/
+  HealthPilot.Api/
+    Models/
+    Data/
+    Dtos/
+    Services/
+    Ingestion/
+    Endpoints/
 ```

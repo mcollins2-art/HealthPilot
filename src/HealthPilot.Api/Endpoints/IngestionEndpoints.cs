@@ -174,7 +174,7 @@ public static class IngestionEndpoints
         if (!string.IsNullOrWhiteSpace(allowedRoot))
         {
             var normalizedAllowedRoot = Path.GetFullPath(allowedRoot);
-            if (!fullPath.StartsWith(normalizedAllowedRoot, StringComparison.OrdinalIgnoreCase))
+            if (!IsPathWithinRoot(fullPath, normalizedAllowedRoot))
             {
                 return Results.BadRequest(new ProblemDetails
                 {
@@ -213,10 +213,11 @@ public static class IngestionEndpoints
         var maxImportBytes = configuration.GetValue<long?>("Ingestion:MaxImportBytes") ?? 1_000_000_000; // 1GB
         if (fileInfo.Length > maxImportBytes)
         {
+            var maxImportMegabytes = maxImportBytes / (1024d * 1024d);
             return Results.BadRequest(new ProblemDetails
             {
                 Title = "File too large",
-                Detail = "Maximum file size is 1GB.",
+                Detail = $"Maximum file size is {maxImportMegabytes:0.##} MB.",
                 Status = StatusCodes.Status400BadRequest,
                 Instance = httpContext.TraceIdentifier
             });
@@ -460,5 +461,15 @@ public static class IngestionEndpoints
         await using var stream = File.OpenRead(fullPath);
         var hash = await SHA256.HashDataAsync(stream, cancellationToken);
         return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static bool IsPathWithinRoot(string candidatePath, string allowedRootPath)
+    {
+        var normalizedCandidate = Path.GetFullPath(candidatePath);
+        var normalizedRoot = Path.GetFullPath(allowedRootPath)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+
+        return normalizedCandidate.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase);
     }
 }
