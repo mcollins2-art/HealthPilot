@@ -59,6 +59,13 @@ public static class PricingLoader
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await using var stream = File.OpenRead(filePath);
+        if (!await HasArrayRootAsync(stream, cancellationToken))
+        {
+            yield break;
+        }
+
+        stream.Position = 0;
+
         var options = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
@@ -82,5 +89,46 @@ public static class PricingLoader
 
             yield return mapped;
         }
+    }
+
+    private static async Task<bool> HasArrayRootAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        if (!stream.CanSeek)
+        {
+            return false;
+        }
+
+        stream.Position = 0;
+        var bom = new byte[3];
+        var bomRead = await stream.ReadAsync(bom.AsMemory(0, bom.Length), cancellationToken);
+        if (bomRead != 3 || bom[0] != 0xEF || bom[1] != 0xBB || bom[2] != 0xBF)
+        {
+            stream.Position = 0;
+        }
+
+        var buffer = new byte[1024];
+
+        while (true)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
+            if (read == 0)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < read; i++)
+            {
+                var current = buffer[i];
+                if (!IsJsonWhitespace(current))
+                {
+                    return current == (byte)'[';
+                }
+            }
+        }
+    }
+
+    private static bool IsJsonWhitespace(byte value)
+    {
+        return value is (byte)' ' or (byte)'\t' or (byte)'\n' or (byte)'\r';
     }
 }
