@@ -165,6 +165,7 @@ public static class IngestionEndpoints
         var tenantId = httpContext.Items.TryGetValue("TenantId", out var resolvedTenantId)
             ? resolvedTenantId?.ToString()
             : null;
+        var normalizedTenantId = tenantId ?? string.Empty;
         var idempotencyKey = httpContext.Request.Headers.TryGetValue("X-Idempotency-Key", out var resolvedIdempotencyKey)
             ? resolvedIdempotencyKey.ToString()
             : null;
@@ -235,7 +236,7 @@ public static class IngestionEndpoints
                 .AsNoTracking()
                 .Where(x => x.ReplayOfJobId == null)
                 .Where(x => x.FileHashSha256 == hash)
-                .Where(x => x.TenantId == tenantId)
+                .Where(x => x.TenantId == normalizedTenantId)
                 .Where(x => x.Status == "queued" || x.Status == "in_progress" || x.Status == "completed")
                 .OrderByDescending(x => x.CreatedAtUtc)
                 .FirstOrDefaultAsync(cancellationToken);
@@ -258,7 +259,7 @@ public static class IngestionEndpoints
                     .AsNoTracking()
                     .Where(x => x.ReplayOfJobId == null)
                     .Where(x => x.IdempotencyKey == idempotencyKey)
-                    .Where(x => x.TenantId == tenantId)
+                    .Where(x => x.TenantId == normalizedTenantId)
                     .Where(x => x.Status == "queued" || x.Status == "in_progress" || x.Status == "completed")
                     .OrderByDescending(x => x.CreatedAtUtc)
                     .FirstOrDefaultAsync(cancellationToken);
@@ -289,7 +290,7 @@ public static class IngestionEndpoints
                 ParserVersion = parserVersion,
                 EffectiveStartUtc = request.EffectiveStartUtc,
                 EffectiveEndUtc = request.EffectiveEndUtc,
-                TenantId = tenantId,
+                TenantId = normalizedTenantId,
                 IdempotencyKey = idempotencyKey
             };
 
@@ -313,7 +314,7 @@ public static class IngestionEndpoints
                 fullPath,
                 batchSize,
                 request.ResumeFromCheckpoint,
-                tenantId,
+                normalizedTenantId,
                 cancellationToken);
 
             job.Status = "completed";

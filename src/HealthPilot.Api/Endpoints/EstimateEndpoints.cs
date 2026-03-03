@@ -31,12 +31,13 @@ public static class EstimateEndpoints
         var tenantId = httpContext.Items.TryGetValue("TenantId", out var resolvedTenantId)
             ? resolvedTenantId?.ToString()
             : null;
+        var normalizedTenantId = tenantId ?? string.Empty;
 
         PricingSummary pricing = await pricingQueryService.GetPricingSummaryAsync(
             request.ZipCode,
             request.Insurer,
             request.CptCode,
-            tenantId,
+            normalizedTenantId,
             cancellationToken);
 
         decimal representativeRate = pricingSelectionStrategy.SelectRepresentativeRate(pricing);
