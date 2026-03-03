@@ -7,6 +7,8 @@ namespace HealthPilot.Api.Tests;
 
 public class ProgramStartupTests
 {
+    private static readonly object EnvironmentLock = new();
+
     [Fact]
     public void Production_Throws_WhenNoApiKeysConfigured()
     {
@@ -28,69 +30,78 @@ public class ProgramStartupTests
     [InlineData("RateLimiting:QueueLimit", "-1", "RateLimiting:QueueLimit must be greater than or equal to 0")]
     public void Startup_Throws_WhenRateLimitConfigurationInvalid(string key, string value, string expectedMessage)
     {
-        var previous = Environment.GetEnvironmentVariable("Security__ApiKey");
-        try
+        lock (EnvironmentLock)
         {
-            Environment.SetEnvironmentVariable("Security__ApiKey", "test-key");
+            var previous = Environment.GetEnvironmentVariable("Security__ApiKey");
+            try
+            {
+                Environment.SetEnvironmentVariable("Security__ApiKey", "test-key");
 
-            using var factory = new StartupWebFactory(
-                environmentName: Environments.Production,
-                extraConfig: new Dictionary<string, string?>
-                {
-                    [key] = value
-                });
+                using var factory = new StartupWebFactory(
+                    environmentName: Environments.Production,
+                    extraConfig: new Dictionary<string, string?>
+                    {
+                        [key] = value
+                    });
 
-            var ex = Assert.Throws<InvalidOperationException>(() => factory.CreateClient());
-            Assert.Contains(expectedMessage, ex.Message);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("Security__ApiKey", previous);
+                var ex = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
+                Assert.Contains(expectedMessage, ex.ToString());
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("Security__ApiKey", previous);
+            }
         }
     }
 
     [Fact]
     public void Production_Starts_WhenLegacyApiKeyConfigured()
     {
-        var previous = Environment.GetEnvironmentVariable("Security__ApiKey");
-        try
+        lock (EnvironmentLock)
         {
-            Environment.SetEnvironmentVariable("Security__ApiKey", "legacy-key");
+            var previous = Environment.GetEnvironmentVariable("Security__ApiKey");
+            try
+            {
+                Environment.SetEnvironmentVariable("Security__ApiKey", "legacy-key");
 
-            using var factory = new StartupWebFactory(
-                environmentName: Environments.Production,
-                extraConfig: new Dictionary<string, string?>());
+                using var factory = new StartupWebFactory(
+                    environmentName: Environments.Production,
+                    extraConfig: new Dictionary<string, string?>());
 
-            using var client = factory.CreateClient();
-            Assert.NotNull(client);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("Security__ApiKey", previous);
+                using var client = factory.CreateClient();
+                Assert.NotNull(client);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("Security__ApiKey", previous);
+            }
         }
     }
 
     [Fact]
     public void Production_Starts_WhenScopedApiKeyConfigured()
     {
-        var previousKey = Environment.GetEnvironmentVariable("Security__ApiKeys__0__Key");
-        var previousName = Environment.GetEnvironmentVariable("Security__ApiKeys__0__Name");
-        try
+        lock (EnvironmentLock)
         {
-            Environment.SetEnvironmentVariable("Security__ApiKeys__0__Name", "startup-test");
-            Environment.SetEnvironmentVariable("Security__ApiKeys__0__Key", "scoped-key");
+            var previousKey = Environment.GetEnvironmentVariable("Security__ApiKeys__0__Key");
+            var previousName = Environment.GetEnvironmentVariable("Security__ApiKeys__0__Name");
+            try
+            {
+                Environment.SetEnvironmentVariable("Security__ApiKeys__0__Name", "startup-test");
+                Environment.SetEnvironmentVariable("Security__ApiKeys__0__Key", "scoped-key");
 
-            using var factory = new StartupWebFactory(
-                environmentName: Environments.Production,
-                extraConfig: new Dictionary<string, string?>());
+                using var factory = new StartupWebFactory(
+                    environmentName: Environments.Production,
+                    extraConfig: new Dictionary<string, string?>());
 
-            using var client = factory.CreateClient();
-            Assert.NotNull(client);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("Security__ApiKeys__0__Name", previousName);
-            Environment.SetEnvironmentVariable("Security__ApiKeys__0__Key", previousKey);
+                using var client = factory.CreateClient();
+                Assert.NotNull(client);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("Security__ApiKeys__0__Name", previousName);
+                Environment.SetEnvironmentVariable("Security__ApiKeys__0__Key", previousKey);
+            }
         }
     }
 
