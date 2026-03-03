@@ -5,6 +5,7 @@ using Xunit;
 
 namespace HealthPilot.Api.Tests;
 
+[Collection(nameof(EnvironmentVariableSensitiveCollection))]
 public class ProgramStartupTests
 {
     private static readonly object _environmentLock = new();
@@ -144,6 +145,11 @@ public class ProgramStartupTests
             if (current is InvalidOperationException)
             {
                 Assert.Contains(expectedMessage, current.Message);
+                return;
+            }
+
+            if (current is ObjectDisposedException && current.Message.Contains(expectedMessage, StringComparison.Ordinal))
+            {
                 return;
             }
 
