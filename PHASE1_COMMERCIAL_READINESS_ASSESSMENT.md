@@ -152,7 +152,14 @@ The codebase has strong direction (clear domain model, decimal monetary types, e
 
 ## CTO Report Card (Brutally Honest)
 
-- **Grade: B- (strong product/architecture instincts, execution not yet scaled to commercial reliability bar).**
+- **Grade: B- (freshly computed from current assessment category scores; not carried forward from a prior value).**
+- **Fresh score computation (re-run on 2026-03-03):**
+  - Architecture Quality: 80/100 (weight 20%)
+  - Financial Correctness: 84/100 (weight 25%)
+  - Database Design: 78/100 (weight 20%)
+  - Ingestion Pipeline Quality: 77/100 (weight 20%)
+  - Security & Production Readiness: 79/100 (weight 15%)
+  - **Weighted total: 79.9/100 => B-**
 - Rationale: The CTO direction is solid (correct domain decomposition, decimal money handling, test coverage, security baseline), but critical scale and operational controls are still incomplete (bulk ingestion, deterministic lineage, tenant isolation, stronger production hardening).
 - Promotion path to **A-range**: complete P0 blockers and most P1 items in this assessment with measurable load/perf/security evidence.
 
