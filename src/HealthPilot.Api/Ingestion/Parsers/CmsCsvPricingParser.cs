@@ -6,10 +6,9 @@ public class CmsCsvPricingParser : IPricingParser
 {
     public Task<IReadOnlyList<StructuredPricingRecord>> ParseAsync(string filePath, CancellationToken cancellationToken)
     {
-        var rows = PricingLoader.LoadCsv(filePath);
         var output = new List<StructuredPricingRecord>();
 
-        foreach (var row in rows)
+        foreach (var row in PricingLoader.StreamCsvRows(filePath))
         {
             string cpt = Normalizers.NormalizeCptCode(GetValue(row, "cpt_code"));
             if (string.IsNullOrWhiteSpace(cpt))
