@@ -155,3 +155,37 @@ The codebase has strong direction (clear domain model, decimal monetary types, e
 - **Grade: B- (strong product/architecture instincts, execution not yet scaled to commercial reliability bar).**
 - Rationale: The CTO direction is solid (correct domain decomposition, decimal money handling, test coverage, security baseline), but critical scale and operational controls are still incomplete (bulk ingestion, deterministic lineage, tenant isolation, stronger production hardening).
 - Promotion path to **A-range**: complete P0 blockers and most P1 items in this assessment with measurable load/perf/security evidence.
+
+---
+
+## A+ Range Implementation Plan (All Required Changes)
+
+To move from current **B-** execution maturity to **A+ commercial execution**, the following must be implemented and verified:
+
+### P0 (must complete)
+1. **Bulk ingestion write path**
+   - Replace row-by-row negotiated/cash rate upserts with set-based bulk ingestion (staging + merge/upsert).
+   - Acceptance: import throughput and DB resource use stay within target SLO at million-row scale.
+2. **Deterministic data lineage**
+   - Record stable source-row fingerprints/hashes and source timestamps per imported row.
+   - Acceptance: replay of identical source files produces identical lineage/audit outputs (excluding controlled metadata).
+3. **Benefit rule versioning framework**
+   - Introduce explicit versioned strategy registry for benefit logic and replay compatibility.
+   - Acceptance: historical estimates can be reproduced under prior logic versions.
+4. **Tenant boundary end-to-end**
+   - Carry tenant identity through auth, request context, persistence, and query filters.
+   - Acceptance: cross-tenant data access is blocked by construction and validated by tests.
+5. **Strong ingestion idempotency**
+   - Enforce idempotency keys/dedupe constraints for repeated job submissions and source rows.
+   - Acceptance: duplicate ingestion attempts do not create duplicate economic records.
+
+### P1 (required for A+ confidence)
+6. Parser plugin registry with contract tests against malformed and real-world payer samples.
+7. Scale validation: indexing/partitioning strategy proven with high-volume load tests.
+8. Production observability: traces, stage-level metrics, and actionable failure taxonomy.
+9. Security hardening: key rotation workflow, secret manager integration, payload/request limits, and audit policy.
+
+### Evidence bar for A+
+- Demonstrated P0 completion in code and tests.
+- Demonstrated most P1 completion with reproducible perf/security artifacts.
+- Operational runbooks updated to reflect new controls and incident handling paths.
