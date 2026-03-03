@@ -153,6 +153,7 @@ The codebase has strong direction (clear domain model, decimal monetary types, e
 ## CTO Report Card (Full Re-Scan)
 
 - **Grade: B+ (full CTO re-scan; supersedes prior B baseline).**
+- **CTO scan score: 85.9/100.**
 - **Independent score computation (full re-scan on 2026-03-03 @ 18:24 UTC):**
   - Architecture Quality: 86/100 (weight 20%)
   - Financial Correctness: 88/100 (weight 25%)
