@@ -2,12 +2,15 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using HealthPilot.Api.Data;
 using HealthPilot.Api.Ingestion;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace HealthPilot.Api.Tests;
@@ -92,11 +95,8 @@ public class IngestionCheckpointEndpointsTests : IAsyncLifetime
     {
         var oldKey = await CreateCheckpointAsync("C:\\data\\cleanup-old.json", 1000, 5, completed: true);
         var freshKey = await CreateCheckpointAsync("C:\\data\\cleanup-fresh.json", 1000, 15, completed: true);
-
-        var oldFile = Path.Combine(_checkpointDirectory, oldKey + ".json");
-        var freshFile = Path.Combine(_checkpointDirectory, freshKey + ".json");
-        File.SetLastWriteTimeUtc(oldFile, DateTime.UtcNow.AddHours(-3));
-        File.SetLastWriteTimeUtc(freshFile, DateTime.UtcNow.AddMinutes(-1));
+        await SetCheckpointUpdatedAtAsync(oldKey, DateTimeOffset.UtcNow.AddHours(-3));
+        await SetCheckpointUpdatedAtAsync(freshKey, DateTimeOffset.UtcNow.AddMinutes(-1));
 
         var cleanupResponse = await _client.PostAsync("/ingestion/checkpoints/cleanup?retentionHours=1", content: null);
 
@@ -214,6 +214,15 @@ public class IngestionCheckpointEndpointsTests : IAsyncLifetime
         return checkpoint.CheckpointKey;
     }
 
+    private async Task SetCheckpointUpdatedAtAsync(string checkpointKey, DateTimeOffset updatedAt)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var checkpoint = await dbContext.IngestionCheckpoints.SingleAsync(x => x.CheckpointKey == checkpointKey);
+        checkpoint.UpdatedAtUtc = updatedAt;
+        await dbContext.SaveChangesAsync();
+    }
+
     private CheckpointWebFactory CreateSecureFactory(string key, string[] scopes)
     {
         return new CheckpointWebFactory(
@@ -238,8 +247,7 @@ public class IngestionCheckpointEndpointsTests : IAsyncLifetime
                 var settings = new Dictionary<string, string?>
                 {
                     ["Ingestion:CheckpointDirectory"] = checkpointDirectory,
-                    ["Ingestion:CheckpointRetentionHours"] = "168",
-                    ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Port=5432;Database=healthpilot;Username=postgres;Password=postgres"
+                    ["Ingestion:CheckpointRetentionHours"] = "168"
                 };
 
                 if (extraConfig is not null)
@@ -251,6 +259,14 @@ public class IngestionCheckpointEndpointsTests : IAsyncLifetime
                 }
 
                 config.AddInMemoryCollection(settings);
+            });
+
+            builder.ConfigureServices(services =>
+            {
+                var dbName = Guid.NewGuid().ToString("N");
+                services.RemoveAll<DbContextOptions<AppDbContext>>();
+                services.AddDbContext<AppDbContext>(options =>
+                    options.UseInMemoryDatabase(dbName));
             });
 
             return base.CreateHost(builder);

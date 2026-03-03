@@ -295,45 +295,17 @@ public class PricingPersistenceService(
         {
             return 0;
         }
-
-        var procedureIds = candidateRows.Select(r => r.ProcedureId).Distinct().ToList();
-        var facilityIds = candidateRows.Select(r => r.FacilityId).Distinct().ToList();
-        var insurerIds = candidateRows.Select(r => r.InsurerId).Distinct().ToList();
-
-        var existingRates = await dbContext.NegotiatedRates
-            .Where(r => procedureIds.Contains(r.ProcedureId)
-                        && facilityIds.Contains(r.FacilityId)
-                        && insurerIds.Contains(r.InsurerId))
-            .ToListAsync(cancellationToken);
-
-        var existingMap = existingRates.ToDictionary(
-            r => (r.ProcedureId, r.FacilityId, r.InsurerId),
-            r => r);
-
         foreach (var row in candidateRows)
         {
-            var key = (row.ProcedureId, row.FacilityId, row.InsurerId);
-            if (existingMap.TryGetValue(key, out var existingRate))
-            {
-                existingRate.Rate = row.Rate;
-                existingRate.RateType = row.RateType;
-                existingRate.LastUpdated = row.LastUpdated;
-            }
-            else
-            {
-                var newRate = new NegotiatedRate
-                {
-                    ProcedureId = row.ProcedureId,
-                    FacilityId = row.FacilityId,
-                    InsurerId = row.InsurerId,
-                    Rate = row.Rate,
-                    RateType = row.RateType,
-                    LastUpdated = row.LastUpdated
-                };
-
-                dbContext.NegotiatedRates.Add(newRate);
-                existingMap[key] = newRate;
-            }
+            await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO negotiated_rates ("ProcedureId", "FacilityId", "InsurerId", "Rate", "RateType", "LastUpdated")
+                VALUES ({row.ProcedureId}, {row.FacilityId}, {row.InsurerId}, {row.Rate}, {row.RateType}, {row.LastUpdated})
+                ON CONFLICT ("ProcedureId", "FacilityId", "InsurerId")
+                DO UPDATE SET
+                    "Rate" = EXCLUDED."Rate",
+                    "RateType" = EXCLUDED."RateType",
+                    "LastUpdated" = EXCLUDED."LastUpdated";
+                """, cancellationToken);
         }
 
         return candidateRows.Count;
@@ -372,40 +344,16 @@ public class PricingPersistenceService(
         {
             return 0;
         }
-
-        var procedureIds = candidateRows.Select(r => r.ProcedureId).Distinct().ToList();
-        var facilityIds = candidateRows.Select(r => r.FacilityId).Distinct().ToList();
-
-        var existingPrices = await dbContext.CashPrices
-            .Where(c => procedureIds.Contains(c.ProcedureId)
-                        && facilityIds.Contains(c.FacilityId))
-            .ToListAsync(cancellationToken);
-
-        var existingMap = existingPrices.ToDictionary(
-            c => (c.ProcedureId, c.FacilityId),
-            c => c);
-
         foreach (var row in candidateRows)
         {
-            var key = (row.ProcedureId, row.FacilityId);
-            if (existingMap.TryGetValue(key, out var existingPrice))
-            {
-                existingPrice.CashPriceAmount = row.CashPrice;
-                existingPrice.LastUpdated = row.LastUpdated;
-            }
-            else
-            {
-                var newPrice = new CashPrice
-                {
-                    ProcedureId = row.ProcedureId,
-                    FacilityId = row.FacilityId,
-                    CashPriceAmount = row.CashPrice,
-                    LastUpdated = row.LastUpdated
-                };
-
-                dbContext.CashPrices.Add(newPrice);
-                existingMap[key] = newPrice;
-            }
+            await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO cash_prices ("ProcedureId", "FacilityId", "cash_price", "LastUpdated")
+                VALUES ({row.ProcedureId}, {row.FacilityId}, {row.CashPrice}, {row.LastUpdated})
+                ON CONFLICT ("ProcedureId", "FacilityId")
+                DO UPDATE SET
+                    "cash_price" = EXCLUDED."cash_price",
+                    "LastUpdated" = EXCLUDED."LastUpdated";
+                """, cancellationToken);
         }
 
         return candidateRows.Count;

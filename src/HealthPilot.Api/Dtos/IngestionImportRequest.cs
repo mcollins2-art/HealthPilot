@@ -12,4 +12,8 @@ public class IngestionImportRequest
     public int? BatchSize { get; set; }
 
     public bool ResumeFromCheckpoint { get; set; } = true;
+    public bool Async { get; set; }
+    public string? SourceSystem { get; set; }
+    public DateTimeOffset? EffectiveStartUtc { get; set; }
+    public DateTimeOffset? EffectiveEndUtc { get; set; }
 }

@@ -11,6 +11,7 @@ public class ApiKeyAuthenticationMiddleware(
 {
     private readonly string? _configuredApiKey = configuration["Security:ApiKey"];
     private readonly string _headerName = configuration["Security:ApiKeyHeader"] ?? "X-API-Key";
+    private readonly string _tenantHeaderName = configuration["Security:TenantHeader"] ?? "X-Tenant-Id";
     private readonly List<ApiKeyConfig> _configuredApiKeys = configuration
         .GetSection("Security:ApiKeys")
         .Get<List<ApiKeyConfig>>() ?? [];
@@ -71,6 +72,31 @@ public class ApiKeyAuthenticationMiddleware(
             return;
         }
 
+        var hasTenantRestrictions = matchedKey.Tenants.Count > 0;
+        var requestTenant = context.Request.Headers.TryGetValue(_tenantHeaderName, out var tenantHeaderValue)
+            ? tenantHeaderValue.ToString()
+            : null;
+
+        if (hasTenantRestrictions && string.IsNullOrWhiteSpace(requestTenant))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new { error = $"Missing required tenant header '{_tenantHeaderName}'." });
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(requestTenant) && hasTenantRestrictions
+            && !matchedKey.Tenants.Contains(requestTenant, StringComparer.OrdinalIgnoreCase))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new { error = "API key does not have required tenant access." });
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(requestTenant))
+        {
+            context.Items["TenantId"] = requestTenant;
+        }
+
         await next(context);
     }
 
@@ -120,5 +146,6 @@ public class ApiKeyAuthenticationMiddleware(
         public string Name { get; set; } = string.Empty;
         public string Key { get; set; } = string.Empty;
         public List<string> Scopes { get; set; } = [];
+        public List<string> Tenants { get; set; } = [];
     }
 }

@@ -48,12 +48,14 @@ Example scoped key config:
 - `GET /health` liveness probe.
 - `GET /health/ready` readiness probe (DB + pending migrations).
 - `POST /estimate` estimate endpoint.
-- `POST /ingestion/import` synchronous ingestion endpoint.
+- `POST /ingestion/import` ingestion endpoint (sync or async job queue via `async: true`).
+- `GET /ingestion/jobs/{jobId}` ingestion job lifecycle status.
+- `POST /ingestion/jobs/{jobId}/replay` deterministic replay enqueue.
 
 ## Ingestion Scale
 
 - Imports use streaming batch persistence (`Ingestion:BatchSize`, default `5000`) for both CSV and JSON files to reduce peak memory pressure.
-- Checkpoint/resume is supported for batched imports; use `resumeFromCheckpoint` in request payload and optionally configure `Ingestion:CheckpointDirectory`.
+- Checkpoint/resume is supported for batched imports with durable DB-backed checkpoints; use `resumeFromCheckpoint` in request payload.
 
 ## Load Testing
 

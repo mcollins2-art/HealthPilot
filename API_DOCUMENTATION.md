@@ -77,7 +77,8 @@ Response body:
 - Batch processing: enabled with `Ingestion:BatchSize` (default `5000`)
 - Streaming behavior: both CSV and JSON imports are processed as streaming batches to reduce peak memory usage
 - Checkpoint/resume: import progress is checkpointed and can resume from last processed row
-- Checkpoint config: `Ingestion:CheckpointDirectory` (optional)
+- Async control plane: set `async: true` to enqueue a background ingestion job
+- Checkpoints: persisted in database for durable resume across process restarts
 - Max file size: 1 GB
 
 Request body:
@@ -85,7 +86,11 @@ Request body:
 {
   "filePath": "C:\\path\\to\\pricing-file.csv",
   "batchSize": 5000,
-  "resumeFromCheckpoint": true
+  "resumeFromCheckpoint": true,
+  "async": true,
+  "sourceSystem": "cms_mrf",
+  "effectiveStartUtc": "2026-01-01T00:00:00Z",
+  "effectiveEndUtc": "2026-12-31T23:59:59Z"
 }
 ```
 
@@ -129,7 +134,7 @@ Response body:
 ```
 
 ### `POST /ingestion/checkpoints/cleanup?retentionHours=168`
-- Purpose: manually delete expired checkpoint files.
+- Purpose: manually delete expired checkpoint records.
 - Auth scope: `ingestion:write`
 - Query param: `retentionHours` (optional, minimum `1`; defaults to `Ingestion:CheckpointRetentionHours`)
 
@@ -154,12 +159,36 @@ Success response includes persistence metrics:
   "negotiatedRatesUpserted": 100000,
   "cashPricesUpserted": 100000,
   "checkpointKey": "...",
+  "jobId": 42,
   "rowsResumedFrom": 0,
   "rowsProcessed": 100000,
   "completed": true,
   "traceId": "..."
 }
 ```
+
+Async response:
+```json
+{
+  "status": "queued",
+  "jobId": 42,
+  "fileHashSha256": "...",
+  "parserVersion": "cms_csv_v1",
+  "traceId": "..."
+}
+```
+
+### `GET /ingestion/jobs/{jobId}`
+- Purpose: get queued/in-progress/completed/dead-letter ingestion job state and provenance metadata.
+- Auth scope: `ingestion:write`
+
+### `POST /ingestion/jobs/{jobId}/replay`
+- Purpose: enqueue a deterministic replay job using the same source file and provenance metadata from a prior job.
+- Auth scope: `ingestion:write`
+
+### `POST /ingestion/pricing/cleanup?retentionDays=365`
+- Purpose: lifecycle cleanup for stale negotiated/cash pricing rows.
+- Auth scope: `ingestion:write`
 
 ## Error model
 - `401`: missing or invalid API key.

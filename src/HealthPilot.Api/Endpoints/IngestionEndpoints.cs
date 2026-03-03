@@ -1,7 +1,12 @@
+using System.Security.Cryptography;
+using HealthPilot.Api.Data;
 using HealthPilot.Api.Dtos;
 using HealthPilot.Api.Ingestion;
 using HealthPilot.Api.Middleware;
+using HealthPilot.Api.Models;
+using HealthPilot.Api.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace HealthPilot.Api.Endpoints;
 
@@ -34,6 +39,27 @@ public static class IngestionEndpoints
             .RequireApiKeyScope("ingestion:write")
             .RequireRateLimiting("api")
             .WithName("CleanupIngestionCheckpoints")
+            .WithTags("Ingestion")
+            .WithOpenApi();
+
+        endpoints.MapGet("/ingestion/jobs/{jobId:long}", HandleJobStatusAsync)
+            .RequireApiKeyScope("ingestion:write")
+            .RequireRateLimiting("api")
+            .WithName("GetIngestionJob")
+            .WithTags("Ingestion")
+            .WithOpenApi();
+
+        endpoints.MapPost("/ingestion/jobs/{jobId:long}/replay", HandleReplayAsync)
+            .RequireApiKeyScope("ingestion:write")
+            .RequireRateLimiting("api")
+            .WithName("ReplayIngestionJob")
+            .WithTags("Ingestion")
+            .WithOpenApi();
+
+        endpoints.MapPost("/ingestion/pricing/cleanup", HandlePricingCleanupAsync)
+            .RequireApiKeyScope("ingestion:write")
+            .RequireRateLimiting("api")
+            .WithName("CleanupPricingLifecycle")
             .WithTags("Ingestion")
             .WithOpenApi();
 
@@ -115,6 +141,8 @@ public static class IngestionEndpoints
     private static async Task<IResult> HandleImportAsync(
         IngestionImportRequest request,
         PricingIngestionPipeline pipeline,
+        AppDbContext dbContext,
+        IIngestionJobQueue jobQueue,
         IConfiguration configuration,
         ILoggerFactory loggerFactory,
         HttpContext httpContext,
@@ -189,14 +217,59 @@ public static class IngestionEndpoints
 
         logger.LogInformation("Starting ingestion import for {FilePath}", fullPath);
 
+        IngestionJob? job = null;
+
         try
         {
             var batchSize = request.BatchSize ?? configuration.GetValue<int?>("Ingestion:BatchSize") ?? 5000;
+            var parserVersion = extension == ".csv" ? "cms_csv_v1" : "cms_json_v1";
+            var hash = await ComputeFileHashAsync(fullPath, cancellationToken);
+
+            job = new IngestionJob
+            {
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                UpdatedAtUtc = DateTimeOffset.UtcNow,
+                Status = request.Async ? "queued" : "in_progress",
+                FilePath = fullPath,
+                BatchSize = batchSize,
+                ResumeFromCheckpoint = request.ResumeFromCheckpoint,
+                SourceSystem = request.SourceSystem,
+                FileHashSha256 = hash,
+                ParserVersion = parserVersion,
+                EffectiveStartUtc = request.EffectiveStartUtc,
+                EffectiveEndUtc = request.EffectiveEndUtc,
+                TenantId = httpContext.Items.TryGetValue("TenantId", out var tenantId) ? tenantId?.ToString() : null
+            };
+
+            dbContext.IngestionJobs.Add(job);
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            if (request.Async)
+            {
+                await jobQueue.EnqueueAsync(job.Id, cancellationToken);
+                return Results.Accepted($"/ingestion/jobs/{job.Id}", new
+                {
+                    status = "queued",
+                    jobId = job.Id,
+                    job.FileHashSha256,
+                    job.ParserVersion,
+                    traceId = httpContext.TraceIdentifier
+                });
+            }
+
             var result = await pipeline.ImportFileWithBatchingAsync(
                 fullPath,
                 batchSize,
                 request.ResumeFromCheckpoint,
                 cancellationToken);
+
+            job.Status = "completed";
+            job.CheckpointKey = result.CheckpointKey;
+            job.RowsProcessed = result.RowsProcessed;
+            job.RecordsReceived = result.Persistence.RecordsReceived;
+            job.RecordsSkipped = result.Persistence.RecordsSkipped;
+            job.UpdatedAtUtc = DateTimeOffset.UtcNow;
+            await dbContext.SaveChangesAsync(cancellationToken);
 
             logger.LogInformation(
                 "Ingestion import complete for {FilePath}. Received={Received}, Skipped={Skipped}, Procedures={Procedures}, Facilities={Facilities}, Insurers={Insurers}, NegotiatedUpserted={Negotiated}, CashUpserted={Cash}",
@@ -220,6 +293,7 @@ public static class IngestionEndpoints
                 result.Persistence.NegotiatedRatesUpserted,
                 result.Persistence.CashPricesUpserted,
                 result.CheckpointKey,
+                jobId = job.Id,
                 result.RowsResumedFrom,
                 result.RowsProcessed,
                 result.Completed,
@@ -229,11 +303,107 @@ public static class IngestionEndpoints
         catch (Exception ex)
         {
             logger.LogError(ex, "Ingestion import failed for {FilePath}", fullPath);
+            if (job is not null)
+            {
+                job.Status = "dead_lettered";
+                job.AttemptCount += 1;
+                job.ErrorMessage = ex.Message;
+                job.UpdatedAtUtc = DateTimeOffset.UtcNow;
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+
             return Results.Problem(
                 title: "Ingestion failed",
                 detail: "An unexpected error occurred while processing the file.",
                 statusCode: StatusCodes.Status500InternalServerError,
                 instance: httpContext.TraceIdentifier);
         }
+    }
+
+    private static async Task<IResult> HandleJobStatusAsync(
+        long jobId,
+        AppDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var job = await dbContext.IngestionJobs
+            .AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == jobId, cancellationToken);
+        return job is null ? Results.NotFound() : Results.Ok(job);
+    }
+
+    private static async Task<IResult> HandleReplayAsync(
+        long jobId,
+        AppDbContext dbContext,
+        IIngestionJobQueue jobQueue,
+        CancellationToken cancellationToken)
+    {
+        var sourceJob = await dbContext.IngestionJobs.SingleOrDefaultAsync(x => x.Id == jobId, cancellationToken);
+        if (sourceJob is null)
+        {
+            return Results.NotFound();
+        }
+
+        var replayJob = new IngestionJob
+        {
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            UpdatedAtUtc = DateTimeOffset.UtcNow,
+            Status = "queued",
+            FilePath = sourceJob.FilePath,
+            BatchSize = sourceJob.BatchSize,
+            ResumeFromCheckpoint = false,
+            ReplayOfJobId = sourceJob.Id,
+            SourceSystem = sourceJob.SourceSystem,
+            FileHashSha256 = sourceJob.FileHashSha256,
+            ParserVersion = sourceJob.ParserVersion,
+            EffectiveStartUtc = sourceJob.EffectiveStartUtc,
+            EffectiveEndUtc = sourceJob.EffectiveEndUtc,
+            TenantId = sourceJob.TenantId
+        };
+
+        dbContext.IngestionJobs.Add(replayJob);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await jobQueue.EnqueueAsync(replayJob.Id, cancellationToken);
+
+        return Results.Accepted($"/ingestion/jobs/{replayJob.Id}", new
+        {
+            status = "queued",
+            jobId = replayJob.Id,
+            replayOfJobId = sourceJob.Id
+        });
+    }
+
+    private static async Task<IResult> HandlePricingCleanupAsync(
+        [FromQuery] int? retentionDays,
+        IPricingLifecycleService pricingLifecycleService,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var days = retentionDays ?? 365;
+        if (days < 1)
+        {
+            return Results.BadRequest(new ProblemDetails
+            {
+                Title = "Invalid request",
+                Detail = "retentionDays must be at least 1.",
+                Status = StatusCodes.Status400BadRequest,
+                Instance = httpContext.TraceIdentifier
+            });
+        }
+
+        var deleted = await pricingLifecycleService.CleanupStalePricingAsync(TimeSpan.FromDays(days), cancellationToken);
+        return Results.Ok(new
+        {
+            deleted.NegotiatedRatesDeleted,
+            deleted.CashPricesDeleted,
+            retentionDays = days,
+            traceId = httpContext.TraceIdentifier
+        });
+    }
+
+    private static async Task<string> ComputeFileHashAsync(string fullPath, CancellationToken cancellationToken)
+    {
+        await using var stream = File.OpenRead(fullPath);
+        var hash = await SHA256.HashDataAsync(stream, cancellationToken);
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }

@@ -195,6 +195,56 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Import_ReturnsAccepted_WhenAsyncRequested()
+    {
+        var csv = Path.Combine(_tempDirectory, "async.csv");
+        await File.WriteAllTextAsync(csv,
+            "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price\n" +
+            "70551,Brain MRI,imaging,Test Hospital,hospital,Hoboken,NJ,07030,Plan A,1200,contracted,950");
+
+        var response = await _client.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
+        {
+            FilePath = csv,
+            BatchSize = 100,
+            ResumeFromCheckpoint = false,
+            Async = true
+        });
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("queued", payload.GetProperty("status").GetString());
+        Assert.True(payload.GetProperty("jobId").GetInt64() > 0);
+        Assert.Equal("cms_csv_v1", payload.GetProperty("parserVersion").GetString());
+    }
+
+    [Fact]
+    public async Task Replay_ReturnsAccepted_ForExistingJob()
+    {
+        var csv = Path.Combine(_tempDirectory, "replay.csv");
+        await File.WriteAllTextAsync(csv,
+            "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price\n" +
+            "70551,Brain MRI,imaging,Test Hospital,hospital,Hoboken,NJ,07030,Plan A,1200,contracted,950");
+
+        var importResponse = await _client.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
+        {
+            FilePath = csv,
+            BatchSize = 100,
+            ResumeFromCheckpoint = false
+        });
+
+        importResponse.EnsureSuccessStatusCode();
+        var importPayload = await importResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var jobId = importPayload.GetProperty("jobId").GetInt64();
+
+        var replayResponse = await _client.PostAsync($"/ingestion/jobs/{jobId}/replay", null);
+        Assert.Equal(HttpStatusCode.Accepted, replayResponse.StatusCode);
+
+        var replayPayload = await replayResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(jobId, replayPayload.GetProperty("replayOfJobId").GetInt64());
+        Assert.True(replayPayload.GetProperty("jobId").GetInt64() > jobId);
+    }
+
+    [Fact]
     public async Task Import_ReturnsOk_WhenBatchSizeUsesConfiguredDefault()
     {
         var csv = Path.Combine(_tempDirectory, "default-batch.csv");
@@ -296,13 +346,14 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
             {
                 webBuilder.ConfigureTestServices(services =>
                 {
+                    var dbName = Guid.NewGuid().ToString("N");
                     services.RemoveAll<IPricingPersistenceService>();
                     services.RemoveAll<IIngestionCheckpointService>();
                     services.RemoveAll<PricingIngestionPipeline>();
                     services.RemoveAll<DbContextOptions<AppDbContext>>();
 
                     services.AddDbContext<AppDbContext>(options =>
-                        options.UseInMemoryDatabase(Guid.NewGuid().ToString("N")));
+                        options.UseInMemoryDatabase(dbName));
 
                     services.AddSingleton<IIngestionCheckpointService, TestCheckpointService>();
                     services.AddSingleton<IPricingPersistenceService>(_ => new TestPricingPersistenceService(throwOnUpsert));
