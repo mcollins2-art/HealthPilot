@@ -2,6 +2,7 @@ namespace HealthPilot.Api.Dtos;
 
 public class EstimateResponse
 {
+    public string? ProcedureDescription { get; set; }
     public decimal? NegotiatedRateMin { get; set; }
     public decimal? NegotiatedRateMax { get; set; }
     public required string NegotiatedRateRange { get; set; }

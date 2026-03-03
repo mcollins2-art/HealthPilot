@@ -16,11 +16,13 @@ public class PricingQueryService(AppDbContext dbContext) : IPricingQueryService
         string normalizedCpt = cptCode.Trim().ToUpperInvariant();
 
         // Resolve dimension keys once, then run fact-table queries on integer IDs.
-        int? procedureId = await dbContext.Procedures
+        var procedureInfo = await dbContext.Procedures
             .AsNoTracking()
             .Where(p => p.CptCode == normalizedCpt)
-            .Select(p => (int?)p.Id)
+            .Select(p => new { p.Id, p.Description })
             .FirstOrDefaultAsync(cancellationToken);
+
+        int? procedureId = procedureInfo?.Id;
 
         int? insurerId = await dbContext.Insurers
             .AsNoTracking()
@@ -63,7 +65,7 @@ public class PricingQueryService(AppDbContext dbContext) : IPricingQueryService
             negotiatedMax = await negotiatedQuery.DefaultIfEmpty().MaxAsync(cancellationToken);
         }
 
-        return new PricingSummary(negotiatedMin, negotiatedMax, cashMin, cashMax);
+        return new PricingSummary(negotiatedMin, negotiatedMax, cashMin, cashMax, procedureInfo?.Description);
     }
 
     public string FormatRange(decimal? minValue, decimal? maxValue)

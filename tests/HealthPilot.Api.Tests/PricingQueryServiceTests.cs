@@ -98,6 +98,7 @@ public class PricingQueryServiceTests
         Assert.Equal(1100m, summary.NegotiatedMax);
         Assert.Equal(800m, summary.CashMin);
         Assert.Equal(1300m, summary.CashMax);
+        Assert.Equal("Brain MRI", summary.ProcedureDescription);
     }
 
     [Fact]

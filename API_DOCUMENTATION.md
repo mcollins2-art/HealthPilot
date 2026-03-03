@@ -55,6 +55,7 @@ Request body:
 Response body:
 ```json
 {
+  "procedureDescription": "Brain MRI with contrast",
   "negotiatedRateMin": 900.0,
   "negotiatedRateMax": 1400.0,
   "negotiatedRateRange": "$900.00 - $1400.00",
