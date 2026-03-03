@@ -21,6 +21,7 @@ public static class EstimateEndpoints
     private static async Task<IResult> HandleEstimateAsync(
         EstimateRequest request,
         IPricingQueryService pricingQueryService,
+        IPricingSelectionStrategy pricingSelectionStrategy,
         IBenefitSimulationService benefitSimulationService,
         IEstimateAuditService estimateAuditService,
         HttpContext httpContext,
@@ -33,8 +34,7 @@ public static class EstimateEndpoints
             request.CptCode,
             cancellationToken);
 
-        // Phase 1 uses the lower end of negotiated rates as a conservative reference.
-        decimal representativeRate = pricing.NegotiatedMin ?? 0m;
+        decimal representativeRate = pricingSelectionStrategy.SelectRepresentativeRate(pricing);
 
         BenefitSimulationResult simulation = benefitSimulationService.Simulate(new BenefitSimulationInput(
             representativeRate,
@@ -53,10 +53,15 @@ public static class EstimateEndpoints
 
         var response = new EstimateResponse
         {
+            NegotiatedRateMin = pricing.NegotiatedMin,
+            NegotiatedRateMax = pricing.NegotiatedMax,
             NegotiatedRateRange = pricingQueryService.FormatRange(pricing.NegotiatedMin, pricing.NegotiatedMax),
-            EstimatedOutOfPocket = $"${simulation.EstimatedPatientResponsibility:F2}",
+            EstimatedOutOfPocket = simulation.EstimatedPatientResponsibility,
+            CashPriceMin = pricing.CashMin,
+            CashPriceMax = pricing.CashMax,
             CashPriceRange = pricingQueryService.FormatRange(pricing.CashMin, pricing.CashMax),
-            InsurerPaymentEstimate = $"${simulation.InsurerPayment:F2}"
+            InsurerPaymentEstimate = simulation.InsurerPayment,
+            RoundingMode = MonetaryPolicy.RoundingMode.ToString()
         };
 
         return Results.Ok(response);

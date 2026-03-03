@@ -202,6 +202,54 @@ public class ApiKeyAuthenticationMiddlewareTests
         Assert.True(nextCalled());
     }
 
+    [Fact]
+    public async Task InvokeAsync_ReturnsForbidden_WhenTenantRestrictedKeyMissingTenantHeader()
+    {
+        var middleware = CreateMiddleware(
+            new Dictionary<string, string?>
+            {
+                ["Security:ApiKeys:0:Name"] = "tenant-client",
+                ["Security:ApiKeys:0:Key"] = "tenant-key",
+                ["Security:ApiKeys:0:Scopes:0"] = "estimate:read",
+                ["Security:ApiKeys:0:Tenants:0"] = "tenant-a"
+            },
+            isDevelopment: false,
+            out _);
+
+        var context = CreateContext("/estimate");
+        context.Request.Headers["X-API-Key"] = "tenant-key";
+
+        await middleware.InvokeAsync(context);
+
+        Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
+        var payload = await ReadBodyAsync(context);
+        Assert.Contains("tenant header", payload, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_AllowsRequest_WhenTenantRestrictedKeyMatchesHeader()
+    {
+        var middleware = CreateMiddleware(
+            new Dictionary<string, string?>
+            {
+                ["Security:ApiKeys:0:Name"] = "tenant-client",
+                ["Security:ApiKeys:0:Key"] = "tenant-key",
+                ["Security:ApiKeys:0:Scopes:0"] = "estimate:read",
+                ["Security:ApiKeys:0:Tenants:0"] = "tenant-a"
+            },
+            isDevelopment: false,
+            out var nextCalled);
+
+        var context = CreateContext("/estimate");
+        context.Request.Headers["X-API-Key"] = "tenant-key";
+        context.Request.Headers["X-Tenant-Id"] = "tenant-a";
+
+        await middleware.InvokeAsync(context);
+
+        Assert.True(nextCalled());
+        Assert.Equal("tenant-a", context.Items["TenantId"]);
+    }
+
     private static ApiKeyAuthenticationMiddleware CreateMiddleware(
         IDictionary<string, string?> settings,
         bool isDevelopment,

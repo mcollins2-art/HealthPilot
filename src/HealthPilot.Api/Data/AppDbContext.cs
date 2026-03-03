@@ -11,6 +11,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NegotiatedRate> NegotiatedRates => Set<NegotiatedRate>();
     public DbSet<CashPrice> CashPrices => Set<CashPrice>();
     public DbSet<EstimateAuditLog> EstimateAuditLogs => Set<EstimateAuditLog>();
+    public DbSet<IngestionCheckpoint> IngestionCheckpoints => Set<IngestionCheckpoint>();
+    public DbSet<IngestionJob> IngestionJobs => Set<IngestionJob>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -36,6 +38,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(x => x.State).HasMaxLength(2).IsRequired();
             entity.Property(x => x.Zip).HasMaxLength(10).IsRequired();
             entity.HasIndex(x => x.Zip);
+            entity.HasIndex(x => new { x.Name, x.City, x.State, x.Zip }).IsUnique();
         });
 
         modelBuilder.Entity<Insurer>(entity =>
@@ -118,6 +121,37 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(x => x.CreatedAt);
             entity.HasIndex(x => x.TraceId);
             entity.HasIndex(x => new { x.ZipCode, x.Insurer, x.CptCode });
+        });
+
+        modelBuilder.Entity<IngestionCheckpoint>(entity =>
+        {
+            entity.ToTable("ingestion_checkpoints");
+            entity.HasKey(x => x.CheckpointKey);
+            entity.Property(x => x.CheckpointKey).HasMaxLength(64);
+            entity.Property(x => x.FilePath).HasMaxLength(1024).IsRequired();
+            entity.Property(x => x.Status).HasMaxLength(32).IsRequired();
+            entity.Property(x => x.UpdatedAtUtc).IsRequired();
+            entity.HasIndex(x => x.UpdatedAtUtc);
+        });
+
+        modelBuilder.Entity<IngestionJob>(entity =>
+        {
+            entity.ToTable("ingestion_jobs");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Status).HasMaxLength(32).IsRequired();
+            entity.Property(x => x.FilePath).HasMaxLength(1024).IsRequired();
+            entity.Property(x => x.CheckpointKey).HasMaxLength(64);
+            entity.Property(x => x.ErrorMessage).HasMaxLength(2048);
+            entity.Property(x => x.SourceSystem).HasMaxLength(100);
+            entity.Property(x => x.FileHashSha256).HasMaxLength(64);
+            entity.Property(x => x.ParserVersion).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.TenantId).HasMaxLength(100);
+            entity.Property(x => x.CreatedAtUtc).IsRequired();
+            entity.Property(x => x.UpdatedAtUtc).IsRequired();
+            entity.HasIndex(x => x.Status);
+            entity.HasIndex(x => x.CreatedAtUtc);
+            entity.HasIndex(x => x.ReplayOfJobId);
+            entity.HasIndex(x => x.FileHashSha256);
         });
     }
 }
