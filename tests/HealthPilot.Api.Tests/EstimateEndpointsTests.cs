@@ -38,10 +38,15 @@ public class EstimateEndpointsTests
 
         response.EnsureSuccessStatusCode();
         var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(100m, payload.GetProperty("negotiatedRateMin").GetDecimal());
+        Assert.Equal(200m, payload.GetProperty("negotiatedRateMax").GetDecimal());
         Assert.Equal("$100.00 - $200.00", payload.GetProperty("negotiatedRateRange").GetString());
-        Assert.Equal("$42.50", payload.GetProperty("estimatedOutOfPocket").GetString());
+        Assert.Equal(42.50m, payload.GetProperty("estimatedOutOfPocket").GetDecimal());
+        Assert.Equal(80m, payload.GetProperty("cashPriceMin").GetDecimal());
+        Assert.Equal(160m, payload.GetProperty("cashPriceMax").GetDecimal());
         Assert.Equal("$80.00 - $160.00", payload.GetProperty("cashPriceRange").GetString());
-        Assert.Equal("$57.50", payload.GetProperty("insurerPaymentEstimate").GetString());
+        Assert.Equal(57.50m, payload.GetProperty("insurerPaymentEstimate").GetDecimal());
+        Assert.Equal("AwayFromZero", payload.GetProperty("roundingMode").GetString());
     }
 
     [Fact]

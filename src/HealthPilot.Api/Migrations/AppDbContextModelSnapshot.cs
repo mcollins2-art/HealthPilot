@@ -162,6 +162,9 @@ namespace HealthPilot.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Name", "City", "State", "Zip")
+                        .IsUnique();
+
                     b.HasIndex("Zip");
 
                     b.ToTable("facilities", (string)null);

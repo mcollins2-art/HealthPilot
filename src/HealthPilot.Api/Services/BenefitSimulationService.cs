@@ -15,7 +15,7 @@ public class BenefitSimulationService : IBenefitSimulationService
         // Edge case: member has already met out-of-pocket maximum.
         if (oopMaxRemaining == 0m)
         {
-            return new BenefitSimulationResult(0m, decimal.Round(negotiatedRate, 2));
+            return new BenefitSimulationResult(0m, MonetaryPolicy.Round(negotiatedRate));
         }
 
         decimal rawPatientResponsibility;
@@ -48,8 +48,8 @@ public class BenefitSimulationService : IBenefitSimulationService
         var insurerPayment = Math.Max(negotiatedRate - patientResponsibility, 0m);
 
         return new BenefitSimulationResult(
-            decimal.Round(patientResponsibility, 2),
-            decimal.Round(insurerPayment, 2)
+            MonetaryPolicy.Round(patientResponsibility),
+            MonetaryPolicy.Round(insurerPayment)
         );
     }
 }

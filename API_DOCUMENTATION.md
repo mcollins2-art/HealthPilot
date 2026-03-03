@@ -55,10 +55,15 @@ Request body:
 Response body:
 ```json
 {
+  "negotiatedRateMin": 900.0,
+  "negotiatedRateMax": 1400.0,
   "negotiatedRateRange": "$900.00 - $1400.00",
-  "estimatedOutOfPocket": "$440.00",
+  "estimatedOutOfPocket": 440.0,
+  "cashPriceMin": 700.0,
+  "cashPriceMax": 1000.0,
   "cashPriceRange": "$700.00 - $1000.00",
-  "insurerPaymentEstimate": "$560.00"
+  "insurerPaymentEstimate": 560.0,
+  "roundingMode": "AwayFromZero"
 }
 ```
 

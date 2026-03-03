@@ -36,6 +36,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(x => x.State).HasMaxLength(2).IsRequired();
             entity.Property(x => x.Zip).HasMaxLength(10).IsRequired();
             entity.HasIndex(x => x.Zip);
+            entity.HasIndex(x => new { x.Name, x.City, x.State, x.Zip }).IsUnique();
         });
 
         modelBuilder.Entity<Insurer>(entity =>

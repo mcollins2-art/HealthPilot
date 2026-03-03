@@ -4,10 +4,10 @@ using HealthPilot.Api.Models;
 
 namespace HealthPilot.Api.Services;
 
-public class EstimateAuditService(AppDbContext dbContext) : IEstimateAuditService
+public class EstimateAuditService(
+    AppDbContext dbContext,
+    IPricingSelectionStrategy pricingSelectionStrategy) : IEstimateAuditService
 {
-    private const string CurrentBenefitLogicVersion = "1.0";
-
     public async Task LogEstimateAsync(
         EstimateRequest request,
         BenefitSimulationResult result,
@@ -30,7 +30,7 @@ public class EstimateAuditService(AppDbContext dbContext) : IEstimateAuditServic
             CopayAppliesBeforeDeductible = request.CopayAppliesBeforeDeductible,
             EstimatedPatientResponsibility = result.EstimatedPatientResponsibility,
             InsurerPayment = result.InsurerPayment,
-            BenefitLogicVersion = CurrentBenefitLogicVersion
+            BenefitLogicVersion = $"{MonetaryPolicy.PolicyVersion}:{pricingSelectionStrategy.PolicyName}"
         };
 
         dbContext.EstimateAuditLogs.Add(auditLog);

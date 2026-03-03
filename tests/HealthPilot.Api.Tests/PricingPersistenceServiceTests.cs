@@ -317,6 +317,32 @@ public class PricingPersistenceServiceTests
 	}
 
 	[Fact]
+	public async Task FacilityDimension_EnforcesNaturalUniqueConstraint()
+	{
+		await using var fixture = await TestDbFixture.CreateAsync();
+		fixture.DbContext.Facilities.Add(new()
+		{
+			Name = "General Hospital",
+			Type = "hospital",
+			City = "New York",
+			State = "NY",
+			Zip = "10001"
+		});
+		await fixture.DbContext.SaveChangesAsync();
+
+		fixture.DbContext.Facilities.Add(new()
+		{
+			Name = "General Hospital",
+			Type = "hospital",
+			City = "New York",
+			State = "NY",
+			Zip = "10001"
+		});
+
+		await Assert.ThrowsAsync<DbUpdateException>(() => fixture.DbContext.SaveChangesAsync());
+	}
+
+	[Fact]
 	public async Task UpsertNegotiatedRatesAsync_SkipsRows_WhenProcedureOrFacilityLookupMissing()
 	{
 		await using var fixture = await TestDbFixture.CreateAsync();

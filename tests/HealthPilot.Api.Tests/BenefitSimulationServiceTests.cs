@@ -177,4 +177,12 @@ public class BenefitSimulationServiceTests
 		Assert.Equal(result.EstimatedPatientResponsibility, decimal.Round(result.EstimatedPatientResponsibility, 2));
 		Assert.Equal(result.InsurerPayment, decimal.Round(result.InsurerPayment, 2));
 	}
+
+	[Fact]
+	public void Simulate_UsesAwayFromZeroRoundingPolicy()
+	{
+		var result = _service.Simulate(new BenefitSimulationInput(1.005m, 0m, 100m, 0m, 10m, true));
+
+		Assert.Equal(1.01m, result.EstimatedPatientResponsibility);
+	}
 }
