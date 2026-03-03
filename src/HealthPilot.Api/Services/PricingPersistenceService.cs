@@ -2,6 +2,8 @@ using HealthPilot.Api.Data;
 using HealthPilot.Api.Dtos;
 using HealthPilot.Api.Models;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using NpgsqlTypes;
 
 namespace HealthPilot.Api.Services;
 
@@ -11,6 +13,7 @@ public class PricingPersistenceService(
 {
     public async Task<PricingPersistenceResult> UpsertPricingDataAsync(
         IReadOnlyList<StructuredPricingRecord> records,
+        long? ingestionJobId,
         CancellationToken cancellationToken)
     {
         var result = new PricingPersistenceResult
@@ -52,12 +55,14 @@ public class PricingPersistenceService(
                 procedureMap,
                 facilityMap,
                 insurerMap,
+                ingestionJobId,
                 cancellationToken);
 
             result.CashPricesUpserted = await UpsertCashPricesAsync(
                 validRecords,
                 procedureMap,
                 facilityMap,
+                ingestionJobId,
                 cancellationToken);
 
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -254,6 +259,7 @@ public class PricingPersistenceService(
         Dictionary<string, int> procedureMap,
         Dictionary<string, int> facilityMap,
         Dictionary<string, int> insurerMap,
+        long? ingestionJobId,
         CancellationToken cancellationToken)
     {
         var candidateRows = new List<(int ProcedureId, int FacilityId, int InsurerId, decimal Rate, string RateType, DateTimeOffset LastUpdated)>();
@@ -295,16 +301,23 @@ public class PricingPersistenceService(
         {
             return 0;
         }
+        if (dbContext.Database.IsNpgsql())
+        {
+            await BulkUpsertNegotiatedRatesPostgresAsync(candidateRows, ingestionJobId, cancellationToken);
+            return candidateRows.Count;
+        }
+
         foreach (var row in candidateRows)
         {
             await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
-                INSERT INTO negotiated_rates ("ProcedureId", "FacilityId", "InsurerId", "Rate", "RateType", "LastUpdated")
-                VALUES ({row.ProcedureId}, {row.FacilityId}, {row.InsurerId}, {row.Rate}, {row.RateType}, {row.LastUpdated})
+                INSERT INTO negotiated_rates ("ProcedureId", "FacilityId", "InsurerId", "Rate", "RateType", "LastUpdated", "IngestionJobId")
+                VALUES ({row.ProcedureId}, {row.FacilityId}, {row.InsurerId}, {row.Rate}, {row.RateType}, {row.LastUpdated}, {ingestionJobId})
                 ON CONFLICT ("ProcedureId", "FacilityId", "InsurerId")
                 DO UPDATE SET
                     "Rate" = EXCLUDED."Rate",
                     "RateType" = EXCLUDED."RateType",
-                    "LastUpdated" = EXCLUDED."LastUpdated";
+                    "LastUpdated" = EXCLUDED."LastUpdated",
+                    "IngestionJobId" = EXCLUDED."IngestionJobId";
                 """, cancellationToken);
         }
 
@@ -315,6 +328,7 @@ public class PricingPersistenceService(
         IReadOnlyList<StructuredPricingRecord> records,
         Dictionary<string, int> procedureMap,
         Dictionary<string, int> facilityMap,
+        long? ingestionJobId,
         CancellationToken cancellationToken)
     {
         var candidateRows = new List<(int ProcedureId, int FacilityId, decimal CashPrice, DateTimeOffset LastUpdated)>();
@@ -344,15 +358,22 @@ public class PricingPersistenceService(
         {
             return 0;
         }
+        if (dbContext.Database.IsNpgsql())
+        {
+            await BulkUpsertCashPricesPostgresAsync(candidateRows, ingestionJobId, cancellationToken);
+            return candidateRows.Count;
+        }
+
         foreach (var row in candidateRows)
         {
             await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
-                INSERT INTO cash_prices ("ProcedureId", "FacilityId", "cash_price", "LastUpdated")
-                VALUES ({row.ProcedureId}, {row.FacilityId}, {row.CashPrice}, {row.LastUpdated})
+                INSERT INTO cash_prices ("ProcedureId", "FacilityId", "cash_price", "LastUpdated", "IngestionJobId")
+                VALUES ({row.ProcedureId}, {row.FacilityId}, {row.CashPrice}, {row.LastUpdated}, {ingestionJobId})
                 ON CONFLICT ("ProcedureId", "FacilityId")
                 DO UPDATE SET
                     "cash_price" = EXCLUDED."cash_price",
-                    "LastUpdated" = EXCLUDED."LastUpdated";
+                    "LastUpdated" = EXCLUDED."LastUpdated",
+                    "IngestionJobId" = EXCLUDED."IngestionJobId";
                 """, cancellationToken);
         }
 
@@ -360,6 +381,122 @@ public class PricingPersistenceService(
     }
 
     private static string NormalizeCpt(string cptCode) => cptCode.Trim().ToUpperInvariant();
+
+    private async Task BulkUpsertNegotiatedRatesPostgresAsync(
+        List<(int ProcedureId, int FacilityId, int InsurerId, decimal Rate, string RateType, DateTimeOffset LastUpdated)> rows,
+        long? ingestionJobId,
+        CancellationToken cancellationToken)
+    {
+        var procedureIds = rows.Select(x => x.ProcedureId).ToArray();
+        var facilityIds = rows.Select(x => x.FacilityId).ToArray();
+        var insurerIds = rows.Select(x => x.InsurerId).ToArray();
+        var rates = rows.Select(x => x.Rate).ToArray();
+        var rateTypes = rows.Select(x => x.RateType).ToArray();
+        var lastUpdated = rows.Select(x => x.LastUpdated.UtcDateTime).ToArray();
+
+        if (ingestionJobId.HasValue)
+        {
+            var ingestionJobIds = Enumerable.Repeat(ingestionJobId.Value, rows.Count).ToArray();
+            var withProvenanceSql = """
+                INSERT INTO negotiated_rates ("ProcedureId", "FacilityId", "InsurerId", "Rate", "RateType", "LastUpdated", "IngestionJobId")
+                SELECT * FROM UNNEST(@procedureIds::int[], @facilityIds::int[], @insurerIds::int[], @rates::numeric[], @rateTypes::text[], @lastUpdated::timestamptz[], @ingestionJobIds::bigint[])
+                AS x("ProcedureId", "FacilityId", "InsurerId", "Rate", "RateType", "LastUpdated", "IngestionJobId")
+                ON CONFLICT ("ProcedureId", "FacilityId", "InsurerId")
+                DO UPDATE SET
+                    "Rate" = EXCLUDED."Rate",
+                    "RateType" = EXCLUDED."RateType",
+                    "LastUpdated" = EXCLUDED."LastUpdated",
+                    "IngestionJobId" = EXCLUDED."IngestionJobId";
+                """;
+
+            await dbContext.Database.ExecuteSqlRawAsync(withProvenanceSql, new object[]
+            {
+                new NpgsqlParameter<int[]>("procedureIds", procedureIds) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Integer },
+                new NpgsqlParameter<int[]>("facilityIds", facilityIds) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Integer },
+                new NpgsqlParameter<int[]>("insurerIds", insurerIds) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Integer },
+                new NpgsqlParameter<decimal[]>("rates", rates) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Numeric },
+                new NpgsqlParameter<string[]>("rateTypes", rateTypes) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Text },
+                new NpgsqlParameter<DateTime[]>("lastUpdated", lastUpdated) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.TimestampTz },
+                new NpgsqlParameter<long[]>("ingestionJobIds", ingestionJobIds) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Bigint }
+            }, cancellationToken);
+            return;
+        }
+
+        var sql = """
+            INSERT INTO negotiated_rates ("ProcedureId", "FacilityId", "InsurerId", "Rate", "RateType", "LastUpdated")
+            SELECT * FROM UNNEST(@procedureIds::int[], @facilityIds::int[], @insurerIds::int[], @rates::numeric[], @rateTypes::text[], @lastUpdated::timestamptz[])
+            AS x("ProcedureId", "FacilityId", "InsurerId", "Rate", "RateType", "LastUpdated")
+            ON CONFLICT ("ProcedureId", "FacilityId", "InsurerId")
+            DO UPDATE SET
+                "Rate" = EXCLUDED."Rate",
+                "RateType" = EXCLUDED."RateType",
+                "LastUpdated" = EXCLUDED."LastUpdated";
+            """;
+
+        await dbContext.Database.ExecuteSqlRawAsync(sql, new object[]
+        {
+            new NpgsqlParameter<int[]>("procedureIds", procedureIds) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Integer },
+            new NpgsqlParameter<int[]>("facilityIds", facilityIds) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Integer },
+            new NpgsqlParameter<int[]>("insurerIds", insurerIds) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Integer },
+            new NpgsqlParameter<decimal[]>("rates", rates) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Numeric },
+            new NpgsqlParameter<string[]>("rateTypes", rateTypes) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Text },
+            new NpgsqlParameter<DateTime[]>("lastUpdated", lastUpdated) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.TimestampTz }
+        }, cancellationToken);
+    }
+
+    private async Task BulkUpsertCashPricesPostgresAsync(
+        List<(int ProcedureId, int FacilityId, decimal CashPrice, DateTimeOffset LastUpdated)> rows,
+        long? ingestionJobId,
+        CancellationToken cancellationToken)
+    {
+        var procedureIds = rows.Select(x => x.ProcedureId).ToArray();
+        var facilityIds = rows.Select(x => x.FacilityId).ToArray();
+        var cashPrices = rows.Select(x => x.CashPrice).ToArray();
+        var lastUpdated = rows.Select(x => x.LastUpdated.UtcDateTime).ToArray();
+
+        if (ingestionJobId.HasValue)
+        {
+            var ingestionJobIds = Enumerable.Repeat(ingestionJobId.Value, rows.Count).ToArray();
+            var withProvenanceSql = """
+                INSERT INTO cash_prices ("ProcedureId", "FacilityId", "cash_price", "LastUpdated", "IngestionJobId")
+                SELECT * FROM UNNEST(@procedureIds::int[], @facilityIds::int[], @cashPrices::numeric[], @lastUpdated::timestamptz[], @ingestionJobIds::bigint[])
+                AS x("ProcedureId", "FacilityId", "cash_price", "LastUpdated", "IngestionJobId")
+                ON CONFLICT ("ProcedureId", "FacilityId")
+                DO UPDATE SET
+                    "cash_price" = EXCLUDED."cash_price",
+                    "LastUpdated" = EXCLUDED."LastUpdated",
+                    "IngestionJobId" = EXCLUDED."IngestionJobId";
+                """;
+
+            await dbContext.Database.ExecuteSqlRawAsync(withProvenanceSql, new object[]
+            {
+                new NpgsqlParameter<int[]>("procedureIds", procedureIds) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Integer },
+                new NpgsqlParameter<int[]>("facilityIds", facilityIds) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Integer },
+                new NpgsqlParameter<decimal[]>("cashPrices", cashPrices) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Numeric },
+                new NpgsqlParameter<DateTime[]>("lastUpdated", lastUpdated) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.TimestampTz },
+                new NpgsqlParameter<long[]>("ingestionJobIds", ingestionJobIds) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Bigint }
+            }, cancellationToken);
+            return;
+        }
+
+        var sql = """
+            INSERT INTO cash_prices ("ProcedureId", "FacilityId", "cash_price", "LastUpdated")
+            SELECT * FROM UNNEST(@procedureIds::int[], @facilityIds::int[], @cashPrices::numeric[], @lastUpdated::timestamptz[])
+            AS x("ProcedureId", "FacilityId", "cash_price", "LastUpdated")
+            ON CONFLICT ("ProcedureId", "FacilityId")
+            DO UPDATE SET
+                "cash_price" = EXCLUDED."cash_price",
+                "LastUpdated" = EXCLUDED."LastUpdated";
+            """;
+
+        await dbContext.Database.ExecuteSqlRawAsync(sql, new object[]
+        {
+            new NpgsqlParameter<int[]>("procedureIds", procedureIds) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Integer },
+            new NpgsqlParameter<int[]>("facilityIds", facilityIds) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Integer },
+            new NpgsqlParameter<decimal[]>("cashPrices", cashPrices) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Numeric },
+            new NpgsqlParameter<DateTime[]>("lastUpdated", lastUpdated) { NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.TimestampTz }
+        }, cancellationToken);
+    }
 
     private static string BuildFacilityKey(string name, string city, string state, string zip)
     {

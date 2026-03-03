@@ -23,4 +23,6 @@ public class IngestionJob
     public DateTimeOffset? EffectiveStartUtc { get; set; }
     public DateTimeOffset? EffectiveEndUtc { get; set; }
     public string? TenantId { get; set; }
+    public string? LeaseOwner { get; set; }
+    public DateTimeOffset? LeaseExpiresAtUtc { get; set; }
 }

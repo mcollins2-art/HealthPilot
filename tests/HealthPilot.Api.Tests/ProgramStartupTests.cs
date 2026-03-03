@@ -5,6 +5,10 @@ using Xunit;
 
 namespace HealthPilot.Api.Tests;
 
+[CollectionDefinition("Environment variable tests", DisableParallelization = true)]
+public sealed class EnvironmentVariableTestsCollection;
+
+[Collection("Environment variable tests")]
 public class ProgramStartupTests
 {
     [Fact]

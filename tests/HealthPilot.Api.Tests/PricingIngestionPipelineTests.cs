@@ -26,7 +26,7 @@ public class PricingIngestionPipelineTests : IDisposable
         var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            pipeline.ImportFileWithBatchingAsync("input.csv", 0, resumeFromCheckpoint: false, CancellationToken.None));
+            pipeline.ImportFileWithBatchingAsync("input.csv", 0, resumeFromCheckpoint: false, ingestionJobId: null, CancellationToken.None));
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public class PricingIngestionPipelineTests : IDisposable
         var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
 
         await Assert.ThrowsAsync<NotSupportedException>(() =>
-            pipeline.ImportFileWithBatchingAsync("input.txt", 100, resumeFromCheckpoint: false, CancellationToken.None));
+            pipeline.ImportFileWithBatchingAsync("input.txt", 100, resumeFromCheckpoint: false, ingestionJobId: null, CancellationToken.None));
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public class PricingIngestionPipelineTests : IDisposable
         var checkpoints = new FakeCheckpointService();
         var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
 
-        var result = await pipeline.ImportFileWithBatchingAsync(filePath, 1, resumeFromCheckpoint: false, CancellationToken.None);
+        var result = await pipeline.ImportFileWithBatchingAsync(filePath, 1, resumeFromCheckpoint: false, ingestionJobId: null, CancellationToken.None);
 
         Assert.True(result.Completed);
         Assert.Equal(3, result.RowsProcessed);
@@ -166,7 +166,7 @@ public class PricingIngestionPipelineTests : IDisposable
         var checkpoints = new FakeCheckpointService(initialRowsProcessed: 1);
         var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
 
-        var result = await pipeline.ImportFileWithBatchingAsync(filePath, 50, resumeFromCheckpoint: true, CancellationToken.None);
+        var result = await pipeline.ImportFileWithBatchingAsync(filePath, 50, resumeFromCheckpoint: true, ingestionJobId: null, CancellationToken.None);
 
         Assert.True(result.Completed);
         Assert.Equal(1, result.RowsResumedFrom);
@@ -192,7 +192,7 @@ public class PricingIngestionPipelineTests : IDisposable
                 var checkpoints = new FakeCheckpointService(initialRowsProcessed: 2);
                 var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
 
-                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: true, CancellationToken.None);
+                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: true, ingestionJobId: null, CancellationToken.None);
 
                 Assert.True(result.Completed);
                 Assert.Equal(2, result.RowsResumedFrom);
@@ -216,7 +216,7 @@ public class PricingIngestionPipelineTests : IDisposable
                 var checkpoints = new FakeCheckpointService(initialRowsProcessed: 9);
                 var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
 
-                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: false, CancellationToken.None);
+                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: false, ingestionJobId: null, CancellationToken.None);
 
                 Assert.True(result.Completed);
                 Assert.Equal(0, result.RowsResumedFrom);
@@ -267,7 +267,7 @@ public class PricingIngestionPipelineTests : IDisposable
                 var checkpoints = new FakeCheckpointService();
                 var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
 
-                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 1, resumeFromCheckpoint: true, CancellationToken.None);
+                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 1, resumeFromCheckpoint: true, ingestionJobId: null, CancellationToken.None);
 
                 Assert.True(result.Completed);
                 Assert.Equal(2, result.RowsProcessed);
@@ -288,7 +288,7 @@ public class PricingIngestionPipelineTests : IDisposable
                 var checkpoints = new FakeCheckpointService();
                 var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
 
-                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: true, CancellationToken.None);
+                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: true, ingestionJobId: null, CancellationToken.None);
 
                 Assert.True(result.Completed);
                 Assert.Single(persistence.Calls);
@@ -342,7 +342,7 @@ public class PricingIngestionPipelineTests : IDisposable
                 var checkpoints = new FakeCheckpointService(initialRowsProcessed: 5);
                 var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
 
-                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: false, CancellationToken.None);
+                var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: false, ingestionJobId: null, CancellationToken.None);
 
                 Assert.True(result.Completed);
                 Assert.Equal(0, result.RowsResumedFrom);
@@ -382,7 +382,7 @@ public class PricingIngestionPipelineTests : IDisposable
             }
         };
 
-        var result = await pipeline.StoreStructuredPricingDataAsync(input, CancellationToken.None);
+        var result = await pipeline.StoreStructuredPricingDataAsync(input, null, CancellationToken.None);
 
         Assert.Single(persistence.Calls);
         Assert.Equal(1, result.RecordsReceived);
@@ -417,6 +417,7 @@ public class PricingIngestionPipelineTests : IDisposable
 
         public Task<PricingPersistenceResult> UpsertPricingDataAsync(
             IReadOnlyList<StructuredPricingRecord> records,
+            long? ingestionJobId,
             CancellationToken cancellationToken)
         {
             Calls.Add(records.ToList());

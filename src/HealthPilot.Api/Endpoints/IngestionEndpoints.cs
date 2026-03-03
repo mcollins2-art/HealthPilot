@@ -21,6 +21,13 @@ public static class IngestionEndpoints
             .WithTags("Ingestion")
             .WithOpenApi();
 
+        endpoints.MapPost("/ingestion/jobs", HandleCreateJobAsync)
+            .RequireApiKeyScope("ingestion:write")
+            .RequireRateLimiting("api")
+            .WithName("CreateIngestionJob")
+            .WithTags("Ingestion")
+            .WithOpenApi();
+
         endpoints.MapGet("/ingestion/checkpoints/{checkpointKey}", HandleCheckpointStatusAsync)
             .RequireApiKeyScope("ingestion:write")
             .RequireRateLimiting("api")
@@ -261,6 +268,7 @@ public static class IngestionEndpoints
                 fullPath,
                 batchSize,
                 request.ResumeFromCheckpoint,
+                job.Id,
                 cancellationToken);
 
             job.Status = "completed";
@@ -329,6 +337,20 @@ public static class IngestionEndpoints
             .AsNoTracking()
             .SingleOrDefaultAsync(x => x.Id == jobId, cancellationToken);
         return job is null ? Results.NotFound() : Results.Ok(job);
+    }
+
+    private static Task<IResult> HandleCreateJobAsync(
+        IngestionImportRequest request,
+        PricingIngestionPipeline pipeline,
+        AppDbContext dbContext,
+        IIngestionJobQueue jobQueue,
+        IConfiguration configuration,
+        ILoggerFactory loggerFactory,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        request.Async = true;
+        return HandleImportAsync(request, pipeline, dbContext, jobQueue, configuration, loggerFactory, httpContext, cancellationToken);
     }
 
     private static async Task<IResult> HandleReplayAsync(

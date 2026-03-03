@@ -28,6 +28,7 @@ public class IngestionCheckpointEndpointsTests : IAsyncLifetime
 
         _factory = new CheckpointWebFactory(_checkpointDirectory);
         _client = _factory.CreateClient();
+        _client.DefaultRequestHeaders.Add("X-API-Key", "ingestion-key");
 
         return Task.CompletedTask;
     }
@@ -247,7 +248,10 @@ public class IngestionCheckpointEndpointsTests : IAsyncLifetime
                 var settings = new Dictionary<string, string?>
                 {
                     ["Ingestion:CheckpointDirectory"] = checkpointDirectory,
-                    ["Ingestion:CheckpointRetentionHours"] = "168"
+                    ["Ingestion:CheckpointRetentionHours"] = "168",
+                    ["Security:ApiKeys:0:Name"] = "ingestion-client",
+                    ["Security:ApiKeys:0:Key"] = "ingestion-key",
+                    ["Security:ApiKeys:0:Scopes:0"] = "ingestion:write"
                 };
 
                 if (extraConfig is not null)

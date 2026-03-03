@@ -17,7 +17,7 @@ public class PricingPersistenceServiceTests
 		await using var fixture = await TestDbFixture.CreateAsync();
 		var service = CreateService(fixture.DbContext);
 
-		var result = await service.UpsertPricingDataAsync([], CancellationToken.None);
+		var result = await service.UpsertPricingDataAsync([], null, CancellationToken.None);
 
 		Assert.Equal(0, result.RecordsReceived);
 		Assert.Equal(0, result.RecordsSkipped);
@@ -47,7 +47,7 @@ public class PricingPersistenceServiceTests
 		var service = CreateService(fixture.DbContext);
 
 		var record = CreateRecord(cptCode: cpt, procedureDescription: description, procedureCategory: category, facilityName: facility, city: city, state: state, zip: zip);
-		var result = await service.UpsertPricingDataAsync([record], CancellationToken.None);
+		var result = await service.UpsertPricingDataAsync([record], null, CancellationToken.None);
 
 		Assert.Equal(1, result.RecordsReceived);
 		Assert.Equal(1, result.RecordsSkipped);
@@ -64,7 +64,7 @@ public class PricingPersistenceServiceTests
 		await using var fixture = await TestDbFixture.CreateAsync();
 		var service = CreateService(fixture.DbContext);
 
-		var result = await service.UpsertPricingDataAsync([CreateRecord()], CancellationToken.None);
+		var result = await service.UpsertPricingDataAsync([CreateRecord()], null, CancellationToken.None);
 
 		Assert.Equal(1, result.ProceduresCreated);
 		Assert.Equal(1, result.FacilitiesCreated);
@@ -76,6 +76,31 @@ public class PricingPersistenceServiceTests
 		Assert.Equal(1, await fixture.DbContext.Insurers.CountAsync());
 		Assert.Equal(1, await fixture.DbContext.NegotiatedRates.CountAsync());
 		Assert.Equal(1, await fixture.DbContext.CashPrices.CountAsync());
+	}
+
+	[Fact]
+	public async Task UpsertPricingDataAsync_PersistsIngestionJobProvenance_WhenProvided()
+	{
+		await using var fixture = await TestDbFixture.CreateAsync();
+		var service = CreateService(fixture.DbContext);
+		var job = new HealthPilot.Api.Models.IngestionJob
+		{
+			CreatedAtUtc = DateTimeOffset.UtcNow,
+			UpdatedAtUtc = DateTimeOffset.UtcNow,
+			Status = "queued",
+			FilePath = "/tmp/fake.csv",
+			BatchSize = 100,
+			ParserVersion = "test_v1"
+		};
+		fixture.DbContext.IngestionJobs.Add(job);
+		await fixture.DbContext.SaveChangesAsync();
+
+		await service.UpsertPricingDataAsync([CreateRecord()], job.Id, CancellationToken.None);
+
+		var negotiated = await fixture.DbContext.NegotiatedRates.SingleAsync();
+		var cash = await fixture.DbContext.CashPrices.SingleAsync();
+		Assert.Equal(job.Id, negotiated.IngestionJobId);
+		Assert.Equal(job.Id, cash.IngestionJobId);
 	}
 
 	[Theory]
@@ -94,8 +119,8 @@ public class PricingPersistenceServiceTests
 		await using var fixture = await TestDbFixture.CreateAsync();
 		var service = CreateService(fixture.DbContext);
 
-		await service.UpsertPricingDataAsync([CreateRecord(negotiatedRate: initialRate, negotiatedRateType: initialType)], CancellationToken.None);
-		await service.UpsertPricingDataAsync([CreateRecord(negotiatedRate: updatedRate, negotiatedRateType: updatedType)], CancellationToken.None);
+		await service.UpsertPricingDataAsync([CreateRecord(negotiatedRate: initialRate, negotiatedRateType: initialType)], null, CancellationToken.None);
+		await service.UpsertPricingDataAsync([CreateRecord(negotiatedRate: updatedRate, negotiatedRateType: updatedType)], null, CancellationToken.None);
 
 		var stored = await fixture.DbContext.NegotiatedRates.SingleAsync();
 		Assert.Equal(updatedRate, stored.Rate);
@@ -114,8 +139,8 @@ public class PricingPersistenceServiceTests
 		await using var fixture = await TestDbFixture.CreateAsync();
 		var service = CreateService(fixture.DbContext);
 
-		await service.UpsertPricingDataAsync([CreateRecord(cashPrice: initialPrice)], CancellationToken.None);
-		await service.UpsertPricingDataAsync([CreateRecord(cashPrice: updatedPrice)], CancellationToken.None);
+		await service.UpsertPricingDataAsync([CreateRecord(cashPrice: initialPrice)], null, CancellationToken.None);
+		await service.UpsertPricingDataAsync([CreateRecord(cashPrice: updatedPrice)], null, CancellationToken.None);
 
 		var stored = await fixture.DbContext.CashPrices.SingleAsync();
 		Assert.Equal(updatedPrice, stored.CashPriceAmount);
@@ -139,7 +164,7 @@ public class PricingPersistenceServiceTests
 		var first = CreateRecord(insurerName: insurerOne);
 		var second = CreateRecord(insurerName: insurerTwo, facilityName: "Regional Medical Center", zip: "10002");
 
-		await service.UpsertPricingDataAsync([first, second], CancellationToken.None);
+		await service.UpsertPricingDataAsync([first, second], null, CancellationToken.None);
 
 		Assert.Equal(expectedInsurers, await fixture.DbContext.Insurers.CountAsync());
 	}
@@ -164,7 +189,7 @@ public class PricingPersistenceServiceTests
 		var first = CreateRecord();
 		var second = CreateRecord(facilityName: secondName, city: secondCity, state: secondState, zip: secondZip, insurerName: "BlueCross");
 
-		await service.UpsertPricingDataAsync([first, second], CancellationToken.None);
+		await service.UpsertPricingDataAsync([first, second], null, CancellationToken.None);
 
 		Assert.Equal(expectedFacilityCount, await fixture.DbContext.Facilities.CountAsync());
 	}
@@ -187,7 +212,7 @@ public class PricingPersistenceServiceTests
 		var first = CreateRecord(cptCode: firstCpt);
 		var second = CreateRecord(cptCode: secondCpt, facilityName: "Regional Medical Center", zip: "10002", insurerName: "BlueCross");
 
-		await service.UpsertPricingDataAsync([first, second], CancellationToken.None);
+		await service.UpsertPricingDataAsync([first, second], null, CancellationToken.None);
 
 		Assert.Equal(expectedProcedureCount, await fixture.DbContext.Procedures.CountAsync());
 	}
@@ -200,7 +225,7 @@ public class PricingPersistenceServiceTests
 
 		var result = await service.UpsertPricingDataAsync([
 			CreateRecord(insurerName: null, negotiatedRate: 1200m, cashPrice: 980m)
-		], CancellationToken.None);
+		], null, CancellationToken.None);
 
 		Assert.Equal(0, result.InsurersCreated);
 		Assert.Equal(0, result.NegotiatedRatesUpserted);
@@ -217,7 +242,7 @@ public class PricingPersistenceServiceTests
 
 		var result = await service.UpsertPricingDataAsync([
 			CreateRecord(cashPrice: null, negotiatedRate: 1200m, insurerName: "Aetna")
-		], CancellationToken.None);
+		], null, CancellationToken.None);
 
 		Assert.Equal(0, result.CashPricesUpserted);
 		Assert.Equal(1, result.NegotiatedRatesUpserted);
@@ -233,7 +258,7 @@ public class PricingPersistenceServiceTests
 
 		await service.UpsertPricingDataAsync([
 			CreateRecord(facilityType: "   ")
-		], CancellationToken.None);
+		], null, CancellationToken.None);
 
 		var facility = await fixture.DbContext.Facilities.SingleAsync();
 		Assert.Equal("Unknown", facility.Type);
@@ -247,7 +272,7 @@ public class PricingPersistenceServiceTests
 
 		var result = await service.UpsertPricingDataAsync([
 			CreateRecord(negotiatedRate: null, insurerName: "Aetna", cashPrice: 900m)
-		], CancellationToken.None);
+		], null, CancellationToken.None);
 
 		Assert.Equal(0, result.NegotiatedRatesUpserted);
 		Assert.Equal(1, result.CashPricesUpserted);
@@ -262,7 +287,7 @@ public class PricingPersistenceServiceTests
 
 		await service.UpsertPricingDataAsync([
 			CreateRecord(negotiatedRateType: "   ")
-		], CancellationToken.None);
+		], null, CancellationToken.None);
 
 		var rate = await fixture.DbContext.NegotiatedRates.SingleAsync();
 		Assert.Equal("contracted", rate.RateType);
@@ -275,7 +300,7 @@ public class PricingPersistenceServiceTests
 		var service = CreateService(fixture.DbContext);
 
 		await Assert.ThrowsAsync<InvalidOperationException>(() =>
-			service.UpsertPricingDataAsync([CreateRecord()], CancellationToken.None));
+			service.UpsertPricingDataAsync([CreateRecord()], null, CancellationToken.None));
 
 		Assert.Equal(0, await fixture.DbContext.Procedures.CountAsync());
 		Assert.Equal(0, await fixture.DbContext.Facilities.CountAsync());
@@ -289,7 +314,7 @@ public class PricingPersistenceServiceTests
 		var service = CreateService(fixture.DbContext);
 
 		var record = CreateRecord(negotiatedRate: 900m, cashPrice: 850m);
-		await service.UpsertPricingDataAsync([record, record, record], CancellationToken.None);
+		await service.UpsertPricingDataAsync([record, record, record], null, CancellationToken.None);
 
 		Assert.Equal(1, await fixture.DbContext.NegotiatedRates.CountAsync());
 		Assert.Equal(1, await fixture.DbContext.CashPrices.CountAsync());
@@ -309,7 +334,7 @@ public class PricingPersistenceServiceTests
 			CreateRecord(insurerName: "BlueCross", facilityName: "Regional Medical Center", zip: "10002", negotiatedRate: 1300m)
 		};
 
-		await service.UpsertPricingDataAsync(records, CancellationToken.None);
+		await service.UpsertPricingDataAsync(records, null, CancellationToken.None);
 
 		Assert.Equal(4, await fixture.DbContext.NegotiatedRates.CountAsync());
 		Assert.Equal(2, await fixture.DbContext.Insurers.CountAsync());
@@ -407,7 +432,7 @@ public class PricingPersistenceServiceTests
 			BindingFlags.Instance | BindingFlags.NonPublic);
 
 		Assert.NotNull(method);
-		var task = method!.Invoke(service, [records, procedureMap, facilityMap, insurerMap, CancellationToken.None]) as Task<int>;
+		var task = method!.Invoke(service, [records, procedureMap, facilityMap, insurerMap, null, CancellationToken.None]) as Task<int>;
 		Assert.NotNull(task);
 
 		return await task!;
@@ -424,7 +449,7 @@ public class PricingPersistenceServiceTests
 			BindingFlags.Instance | BindingFlags.NonPublic);
 
 		Assert.NotNull(method);
-		var task = method!.Invoke(service, [records, procedureMap, facilityMap, CancellationToken.None]) as Task<int>;
+		var task = method!.Invoke(service, [records, procedureMap, facilityMap, null, CancellationToken.None]) as Task<int>;
 		Assert.NotNull(task);
 
 		return await task!;
