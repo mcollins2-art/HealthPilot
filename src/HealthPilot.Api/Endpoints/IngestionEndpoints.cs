@@ -224,6 +224,30 @@ public static class IngestionEndpoints
             var batchSize = request.BatchSize ?? configuration.GetValue<int?>("Ingestion:BatchSize") ?? 5000;
             var parserVersion = extension == ".csv" ? "cms_csv_v1" : "cms_json_v1";
             var hash = await ComputeFileHashAsync(fullPath, cancellationToken);
+            var tenantId = httpContext.Items.TryGetValue("TenantId", out var resolvedTenantId)
+                ? resolvedTenantId?.ToString()
+                : null;
+
+            var existingJob = await dbContext.IngestionJobs
+                .AsNoTracking()
+                .Where(x => x.ReplayOfJobId == null)
+                .Where(x => x.FileHashSha256 == hash)
+                .Where(x => x.TenantId == tenantId)
+                .Where(x => x.Status == "queued" || x.Status == "in_progress" || x.Status == "completed")
+                .OrderByDescending(x => x.CreatedAtUtc)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (existingJob is not null)
+            {
+                return Results.Conflict(new ProblemDetails
+                {
+                    Title = "Duplicate ingestion job",
+                    Detail = "An ingestion job for this file hash already exists for the current tenant.",
+                    Status = StatusCodes.Status409Conflict,
+                    Instance = httpContext.TraceIdentifier,
+                    Extensions = { ["jobId"] = existingJob.Id }
+                });
+            }
 
             job = new IngestionJob
             {
@@ -238,7 +262,7 @@ public static class IngestionEndpoints
                 ParserVersion = parserVersion,
                 EffectiveStartUtc = request.EffectiveStartUtc,
                 EffectiveEndUtc = request.EffectiveEndUtc,
-                TenantId = httpContext.Items.TryGetValue("TenantId", out var tenantId) ? tenantId?.ToString() : null
+                TenantId = tenantId
             };
 
             dbContext.IngestionJobs.Add(job);

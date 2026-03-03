@@ -46,8 +46,8 @@ public class PricingIngestionPipelineTests : IDisposable
     {
         var csvPath = Path.Combine(_tempDirectory, "parse.csv");
         File.WriteAllText(csvPath,
-            "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price\n" +
-            "70551,Brain MRI,imaging,Test Hospital,hospital,Hoboken,NJ,07030,Plan A,1200,contracted,950");
+            "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price,last_updated\n" +
+            "70551,Brain MRI,imaging,Test Hospital,hospital,Hoboken,NJ,07030,Plan A,1200,contracted,950,2025-01-01T00:00:00Z");
 
         var jsonPath = Path.Combine(_tempDirectory, "parse.json");
         await File.WriteAllTextAsync(jsonPath, """
@@ -61,12 +61,13 @@ public class PricingIngestionPipelineTests : IDisposable
             "city": "Jersey City",
             "state": "NJ",
             "zip": "07302",
-            "insurer": "Plan B",
-            "negotiated_rate": 900,
-            "rate_type": "contracted",
-            "cash_price": 700
-          }
-        ]
+             "insurer": "Plan B",
+             "negotiated_rate": 900,
+             "rate_type": "contracted",
+             "cash_price": 700,
+             "last_updated": "2025-01-02T00:00:00Z"
+           }
+         ]
         """);
 
         using var dbContext = CreateDbContext();
@@ -77,8 +78,10 @@ public class PricingIngestionPipelineTests : IDisposable
 
         Assert.Single(csvRecords);
         Assert.Equal("70551", csvRecords[0].CptCode);
+        Assert.Equal(DateTimeOffset.Parse("2025-01-01T00:00:00Z"), csvRecords[0].LastUpdated);
         Assert.Single(jsonRecords);
         Assert.Equal("70450", jsonRecords[0].CptCode);
+        Assert.Equal(DateTimeOffset.Parse("2025-01-02T00:00:00Z"), jsonRecords[0].LastUpdated);
     }
 
     [Fact]

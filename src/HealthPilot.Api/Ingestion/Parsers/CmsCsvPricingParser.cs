@@ -1,4 +1,5 @@
 using HealthPilot.Api.Dtos;
+using System.Globalization;
 
 namespace HealthPilot.Api.Ingestion.Parsers;
 
@@ -6,6 +7,7 @@ public class CmsCsvPricingParser : IPricingParser
 {
     public Task<IReadOnlyList<StructuredPricingRecord>> ParseAsync(string filePath, CancellationToken cancellationToken)
     {
+        var sourceLastUpdated = File.GetLastWriteTimeUtc(filePath);
         var rows = PricingLoader.LoadCsv(filePath);
         var output = new List<StructuredPricingRecord>();
 
@@ -31,7 +33,7 @@ public class CmsCsvPricingParser : IPricingParser
                 NegotiatedRate = ParseDecimal(GetValue(row, "negotiated_rate")),
                 NegotiatedRateType = GetValue(row, "rate_type"),
                 CashPrice = ParseDecimal(GetValue(row, "cash_price")),
-                LastUpdated = DateTimeOffset.UtcNow
+                LastUpdated = ParseDateTimeOffset(GetValue(row, "last_updated")) ?? sourceLastUpdated
             });
         }
 
@@ -45,6 +47,15 @@ public class CmsCsvPricingParser : IPricingParser
 
     private static decimal? ParseDecimal(string value)
     {
-        return decimal.TryParse(value, out var parsed) ? parsed : null;
+        return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    private static DateTimeOffset? ParseDateTimeOffset(string value)
+    {
+        return DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed)
+            ? parsed
+            : null;
     }
 }

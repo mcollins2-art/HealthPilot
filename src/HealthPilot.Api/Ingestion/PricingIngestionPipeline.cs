@@ -1,3 +1,4 @@
+using System.Globalization;
 using HealthPilot.Api.Data;
 using HealthPilot.Api.Dtos;
 using HealthPilot.Api.Ingestion.Parsers;
@@ -58,6 +59,7 @@ public class PricingIngestionPipeline(
         bool resumeFromCheckpoint,
         CancellationToken cancellationToken)
     {
+        var sourceLastUpdated = File.GetLastWriteTimeUtc(filePath);
         var checkpoint = await checkpointService.GetOrCreateAsync(filePath, batchSize, cancellationToken);
         var resumeOffset = resumeFromCheckpoint ? checkpoint.RowsProcessed : 0;
 
@@ -80,7 +82,7 @@ public class PricingIngestionPipeline(
                 continue;
             }
 
-            var mapped = MapRow(row);
+            var mapped = MapRow(row, sourceLastUpdated);
             if (mapped is null)
             {
                 continue;
@@ -122,6 +124,7 @@ public class PricingIngestionPipeline(
         bool resumeFromCheckpoint,
         CancellationToken cancellationToken)
     {
+        var sourceLastUpdated = File.GetLastWriteTimeUtc(filePath);
         var checkpoint = await checkpointService.GetOrCreateAsync(filePath, batchSize, cancellationToken);
         var resumeOffset = resumeFromCheckpoint ? checkpoint.RowsProcessed : 0;
 
@@ -142,7 +145,7 @@ public class PricingIngestionPipeline(
                 continue;
             }
 
-            var mapped = MapRow(row);
+            var mapped = MapRow(row, sourceLastUpdated);
             if (mapped is null)
             {
                 continue;
@@ -178,7 +181,7 @@ public class PricingIngestionPipeline(
         };
     }
 
-    private static StructuredPricingRecord? MapRow(Dictionary<string, string> row)
+    private static StructuredPricingRecord? MapRow(Dictionary<string, string> row, DateTimeOffset sourceLastUpdated)
     {
         string cpt = Normalizers.NormalizeCptCode(GetValue(row, "cpt_code"));
         if (string.IsNullOrWhiteSpace(cpt))
@@ -200,7 +203,7 @@ public class PricingIngestionPipeline(
             NegotiatedRate = ParseDecimal(GetValue(row, "negotiated_rate")),
             NegotiatedRateType = GetValue(row, "rate_type"),
             CashPrice = ParseDecimal(GetValue(row, "cash_price")),
-            LastUpdated = DateTimeOffset.UtcNow
+            LastUpdated = ParseDateTimeOffset(GetValue(row, "last_updated")) ?? sourceLastUpdated
         };
     }
 
@@ -211,7 +214,16 @@ public class PricingIngestionPipeline(
 
     private static decimal? ParseDecimal(string value)
     {
-        return decimal.TryParse(value, out var parsed) ? parsed : null;
+        return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    private static DateTimeOffset? ParseDateTimeOffset(string value)
+    {
+        return DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed)
+            ? parsed
+            : null;
     }
 
     private static void MergeResult(PricingPersistenceResult aggregate, PricingPersistenceResult batchResult)

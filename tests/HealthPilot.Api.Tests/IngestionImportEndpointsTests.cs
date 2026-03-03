@@ -218,6 +218,39 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Import_ReturnsConflict_WhenDuplicateFileHashSubmitted()
+    {
+        var csv = Path.Combine(_tempDirectory, "duplicate.csv");
+        await File.WriteAllTextAsync(csv,
+            "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price\n" +
+            "70551,Brain MRI,imaging,Test Hospital,hospital,Hoboken,NJ,07030,Plan A,1200,contracted,950");
+
+        var first = await _client.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
+        {
+            FilePath = csv,
+            BatchSize = 100,
+            ResumeFromCheckpoint = false
+        });
+
+        first.EnsureSuccessStatusCode();
+        var firstPayload = await first.Content.ReadFromJsonAsync<JsonElement>();
+
+        var second = await _client.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
+        {
+            FilePath = csv,
+            BatchSize = 100,
+            ResumeFromCheckpoint = false
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+        var problem = await second.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("Duplicate ingestion job", problem!.Title);
+        var existingJobId = Assert.IsType<JsonElement>(problem.Extensions["jobId"]).GetInt64();
+        Assert.Equal(firstPayload.GetProperty("jobId").GetInt64(), existingJobId);
+    }
+
+    [Fact]
     public async Task Replay_ReturnsAccepted_ForExistingJob()
     {
         var csv = Path.Combine(_tempDirectory, "replay.csv");
