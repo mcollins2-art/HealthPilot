@@ -30,9 +30,11 @@ public static class HealthEndpoints
 
         var pendingMigrations = await dbContext.Database.GetPendingMigrationsAsync(cancellationToken);
         var pendingCount = pendingMigrations.Count();
+        var queuedJobs = await dbContext.IngestionJobs.CountAsync(x => x.Status == "queued", cancellationToken);
+        var inProgressJobs = await dbContext.IngestionJobs.CountAsync(x => x.Status == "in_progress", cancellationToken);
 
         return pendingCount > 0
             ? Results.StatusCode(StatusCodes.Status503ServiceUnavailable)
-            : Results.Ok(new { status = "ready" });
+            : Results.Ok(new { status = "ready", queuedJobs, inProgressJobs });
     }
 }

@@ -40,6 +40,14 @@ $body = @{ filePath = "C:\\data\\cms-pricing.csv" } | ConvertTo-Json
 Invoke-RestMethod -Uri "http://localhost:5000/ingestion/import" -Method Post -Headers $headers -ContentType "application/json" -Body $body
 ```
 
+### 3.3 Async ingestion job (recommended)
+```powershell
+$headers = @{ "X-API-Key" = "<ingestion-key>" }
+$body = @{ filePath = "C:\\data\\cms-pricing.csv"; batchSize = 5000; resumeFromCheckpoint = $true } | ConvertTo-Json
+$job = Invoke-RestMethod -Uri "http://localhost:5000/ingestion/jobs" -Method Post -Headers $headers -ContentType "application/json" -Body $body
+Invoke-RestMethod -Uri "http://localhost:5000/ingestion/jobs/$($job.jobId)" -Headers $headers
+```
+
 ## 4) Troubleshooting
 ### 4.1 `500` with `relation "estimate_audit_logs" does not exist`
 Cause: DB schema behind migrations.
@@ -97,7 +105,15 @@ cd backend
 
 ## 6) Security checklist (pilot)
 - `Security:ApiKey` OR `Security:ApiKeys` configured in non-development.
+- `ConnectionStrings:DefaultConnection` configured in non-development.
 - Distinct scoped keys per client/integration.
 - No production secrets committed to source control.
 - `Ingestion:AllowedRootPath` configured where ingestion endpoint is enabled.
 - Swagger/OpenAPI auth bypass only allowed in development environment.
+
+## 7) Commercial readiness delta (Wave 1 + critical Wave 2)
+- Job-first ingestion contract: `POST /ingestion/jobs` + durable status polling.
+- Worker durability hardening: queued jobs are claimed from DB with lease expiry support.
+- Bulk ingest hardening: Postgres set-based upsert batches (`UNNEST` + `ON CONFLICT`) replace per-row writes in production path.
+- Provenance hardening: negotiated/cash facts now store `IngestionJobId` back-reference for source traceability.
+- SLO metrics hardening: ingestion queue latency and estimate latency histograms are emitted via `System.Diagnostics.Metrics`.

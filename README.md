@@ -28,7 +28,7 @@ dotnet run --project .\src\HealthPilot.Api\HealthPilot.Api.csproj --urls "http:/
 - Scoped API keys are supported via `Security:ApiKeys`.
 - Endpoint scopes:
   - `/estimate` requires `estimate:read`
-  - `/ingestion/import` requires `ingestion:write`
+  - `/ingestion/import` and `/ingestion/jobs` require `ingestion:write`
 - Rate limiting is enabled and config-driven via `RateLimiting`.
 
 Example scoped key config:
@@ -48,6 +48,7 @@ Example scoped key config:
 - `GET /health` liveness probe.
 - `GET /health/ready` readiness probe (DB + pending migrations).
 - `POST /estimate` estimate endpoint.
+- `POST /ingestion/jobs` create async ingestion job (recommended production path).
 - `POST /ingestion/import` ingestion endpoint (sync or async job queue via `async: true`).
 - `GET /ingestion/jobs/{jobId}` ingestion job lifecycle status.
 - `POST /ingestion/jobs/{jobId}/replay` deterministic replay enqueue.
@@ -55,11 +56,14 @@ Example scoped key config:
 ## Ingestion Scale
 
 - Imports use streaming batch persistence (`Ingestion:BatchSize`, default `5000`) for both CSV and JSON files to reduce peak memory pressure.
+- Npgsql persistence uses set-based array `UNNEST` bulk upserts with `ON CONFLICT` to avoid row-by-row SQL execution in production.
 - Checkpoint/resume is supported for batched imports with durable DB-backed checkpoints; use `resumeFromCheckpoint` in request payload.
+- Imported negotiated/cash facts are linked to `ingestion_jobs` via `IngestionJobId` for provenance traceability (hash + parser version + source metadata).
 
 ## Load Testing
 
 - Perf smoke script: `scripts/loadtest/Run-EstimatePerfSmoke.ps1`.
+- Ingestion throughput benchmark script: `scripts/benchmark/Run-IngestionUpsertBenchmark.ps1`.
 
 Example:
 

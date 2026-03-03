@@ -26,16 +26,18 @@ public class PricingIngestionPipeline(
     // Placeholder for scalable upsert orchestration into normalized pricing tables.
     public async Task<PricingPersistenceResult> StoreStructuredPricingDataAsync(
         IReadOnlyList<StructuredPricingRecord> records,
+        long? ingestionJobId,
         CancellationToken cancellationToken)
     {
         _ = dbContext;
-        return await pricingPersistenceService.UpsertPricingDataAsync(records, cancellationToken);
+        return await pricingPersistenceService.UpsertPricingDataAsync(records, ingestionJobId, cancellationToken);
     }
 
     public async Task<IngestionBatchImportResult> ImportFileWithBatchingAsync(
         string filePath,
         int batchSize,
         bool resumeFromCheckpoint,
+        long? ingestionJobId,
         CancellationToken cancellationToken)
     {
         if (batchSize < 1)
@@ -46,8 +48,8 @@ public class PricingIngestionPipeline(
         var extension = Path.GetExtension(filePath).ToLowerInvariant();
         return extension switch
         {
-            ".csv" => await ImportCsvWithBatchingAsync(filePath, batchSize, resumeFromCheckpoint, cancellationToken),
-            ".json" => await ImportJsonWithBatchingAsync(filePath, batchSize, resumeFromCheckpoint, cancellationToken),
+            ".csv" => await ImportCsvWithBatchingAsync(filePath, batchSize, resumeFromCheckpoint, ingestionJobId, cancellationToken),
+            ".json" => await ImportJsonWithBatchingAsync(filePath, batchSize, resumeFromCheckpoint, ingestionJobId, cancellationToken),
             _ => throw new NotSupportedException($"Unsupported file extension: {extension}")
         };
     }
@@ -56,6 +58,7 @@ public class PricingIngestionPipeline(
         string filePath,
         int batchSize,
         bool resumeFromCheckpoint,
+        long? ingestionJobId,
         CancellationToken cancellationToken)
     {
         var checkpoint = await checkpointService.GetOrCreateAsync(filePath, batchSize, cancellationToken);
@@ -90,7 +93,7 @@ public class PricingIngestionPipeline(
 
             if (batch.Count >= batchSize)
             {
-                var batchResult = await pricingPersistenceService.UpsertPricingDataAsync(batch, cancellationToken);
+                var batchResult = await pricingPersistenceService.UpsertPricingDataAsync(batch, ingestionJobId, cancellationToken);
                 MergeResult(aggregate, batchResult);
                 batch.Clear();
                 await checkpointService.SaveProgressAsync(checkpoint.CheckpointKey, rowsSeen, cancellationToken);
@@ -99,7 +102,7 @@ public class PricingIngestionPipeline(
 
         if (batch.Count > 0)
         {
-            var batchResult = await pricingPersistenceService.UpsertPricingDataAsync(batch, cancellationToken);
+            var batchResult = await pricingPersistenceService.UpsertPricingDataAsync(batch, ingestionJobId, cancellationToken);
             MergeResult(aggregate, batchResult);
             await checkpointService.SaveProgressAsync(checkpoint.CheckpointKey, rowsSeen, cancellationToken);
         }
@@ -120,6 +123,7 @@ public class PricingIngestionPipeline(
         string filePath,
         int batchSize,
         bool resumeFromCheckpoint,
+        long? ingestionJobId,
         CancellationToken cancellationToken)
     {
         var checkpoint = await checkpointService.GetOrCreateAsync(filePath, batchSize, cancellationToken);
@@ -152,7 +156,7 @@ public class PricingIngestionPipeline(
 
             if (batch.Count >= batchSize)
             {
-                var batchResult = await pricingPersistenceService.UpsertPricingDataAsync(batch, cancellationToken);
+                var batchResult = await pricingPersistenceService.UpsertPricingDataAsync(batch, ingestionJobId, cancellationToken);
                 MergeResult(aggregate, batchResult);
                 batch.Clear();
                 await checkpointService.SaveProgressAsync(checkpoint.CheckpointKey, rowsSeen, cancellationToken);
@@ -161,7 +165,7 @@ public class PricingIngestionPipeline(
 
         if (batch.Count > 0)
         {
-            var batchResult = await pricingPersistenceService.UpsertPricingDataAsync(batch, cancellationToken);
+            var batchResult = await pricingPersistenceService.UpsertPricingDataAsync(batch, ingestionJobId, cancellationToken);
             MergeResult(aggregate, batchResult);
             await checkpointService.SaveProgressAsync(checkpoint.CheckpointKey, rowsSeen, cancellationToken);
         }

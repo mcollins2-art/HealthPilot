@@ -6,5 +6,6 @@ public interface IPricingPersistenceService
 {
     Task<PricingPersistenceResult> UpsertPricingDataAsync(
         IReadOnlyList<StructuredPricingRecord> records,
+        long? ingestionJobId,
         CancellationToken cancellationToken);
 }

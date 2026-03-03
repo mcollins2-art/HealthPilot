@@ -29,7 +29,7 @@
 ### `GET /health/ready`
 - Purpose: readiness probe (DB connectivity + pending migrations).
 - Auth: not required.
-- Success: `200 { "status": "ready" }`
+- Success: `200 { "status": "ready", "queuedJobs": 0, "inProgressJobs": 0 }`
 - Failure: `503` when DB is unavailable or migrations are pending.
 
 ## Estimate
@@ -79,6 +79,7 @@ Response body:
 - Checkpoint/resume: import progress is checkpointed and can resume from last processed row
 - Async control plane: set `async: true` to enqueue a background ingestion job
 - Checkpoints: persisted in database for durable resume across process restarts
+- Provenance linkage: imported facts are tagged with `IngestionJobId`
 - Max file size: 1 GB
 
 Request body:
@@ -177,6 +178,11 @@ Async response:
   "traceId": "..."
 }
 ```
+
+### `POST /ingestion/jobs`
+- Purpose: create an asynchronous ingestion job (recommended control-plane contract).
+- Auth scope: `ingestion:write`
+- Behavior: validates file request and enqueues immediately (returns `202` + `jobId`), then worker processes from durable DB state.
 
 ### `GET /ingestion/jobs/{jobId}`
 - Purpose: get queued/in-progress/completed/dead-letter ingestion job state and provenance metadata.

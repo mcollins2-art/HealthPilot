@@ -75,6 +75,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
             entity.HasIndex(x => new { x.ProcedureId, x.InsurerId, x.FacilityId });
             entity.HasIndex(x => x.LastUpdated);
+            entity.HasIndex(x => x.IngestionJobId);
+            entity.HasOne(x => x.IngestionJob)
+                .WithMany()
+                .HasForeignKey(x => x.IngestionJobId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<CashPrice>(entity =>
@@ -97,6 +102,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
             entity.HasIndex(x => new { x.ProcedureId, x.FacilityId });
             entity.HasIndex(x => x.LastUpdated);
+            entity.HasIndex(x => x.IngestionJobId);
+            entity.HasOne(x => x.IngestionJob)
+                .WithMany()
+                .HasForeignKey(x => x.IngestionJobId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<EstimateAuditLog>(entity =>
@@ -146,9 +156,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(x => x.FileHashSha256).HasMaxLength(64);
             entity.Property(x => x.ParserVersion).HasMaxLength(50).IsRequired();
             entity.Property(x => x.TenantId).HasMaxLength(100);
+            entity.Property(x => x.LeaseOwner).HasMaxLength(100);
             entity.Property(x => x.CreatedAtUtc).IsRequired();
             entity.Property(x => x.UpdatedAtUtc).IsRequired();
             entity.HasIndex(x => x.Status);
+            entity.HasIndex(x => x.LeaseExpiresAtUtc);
             entity.HasIndex(x => x.CreatedAtUtc);
             entity.HasIndex(x => x.ReplayOfJobId);
             entity.HasIndex(x => x.FileHashSha256);

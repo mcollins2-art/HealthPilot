@@ -1,11 +1,16 @@
 using HealthPilot.Api.Dtos;
 using HealthPilot.Api.Middleware;
 using HealthPilot.Api.Services;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 
 namespace HealthPilot.Api.Endpoints;
 
 public static class EstimateEndpoints
 {
+    private static readonly Meter Meter = new("HealthPilot.Estimate");
+    private static readonly Histogram<double> EstimateLatencyMs = Meter.CreateHistogram<double>("estimate_latency_ms");
+
     public static IEndpointRouteBuilder MapEstimateEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapPost("/estimate", HandleEstimateAsync)
@@ -27,6 +32,7 @@ public static class EstimateEndpoints
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
+        var started = Stopwatch.GetTimestamp();
         // Retrieve negotiated/cash pricing window for requested geography + CPT + insurer.
         PricingSummary pricing = await pricingQueryService.GetPricingSummaryAsync(
             request.ZipCode,
@@ -64,6 +70,7 @@ public static class EstimateEndpoints
             RoundingMode = MonetaryPolicy.RoundingMode.ToString()
         };
 
+        EstimateLatencyMs.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         return Results.Ok(response);
     }
 }

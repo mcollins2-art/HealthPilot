@@ -218,6 +218,27 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task CreateJob_ReturnsAccepted_WhenRequestValid()
+    {
+        var csv = Path.Combine(_tempDirectory, "job-create.csv");
+        await File.WriteAllTextAsync(csv,
+            "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price\n" +
+            "70551,Brain MRI,imaging,Test Hospital,hospital,Hoboken,NJ,07030,Plan A,1200,contracted,950");
+
+        var response = await _client.PostAsJsonAsync("/ingestion/jobs", new IngestionImportRequest
+        {
+            FilePath = csv,
+            BatchSize = 100,
+            ResumeFromCheckpoint = false
+        });
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("queued", payload.GetProperty("status").GetString());
+        Assert.True(payload.GetProperty("jobId").GetInt64() > 0);
+    }
+
+    [Fact]
     public async Task Replay_ReturnsAccepted_ForExistingJob()
     {
         var csv = Path.Combine(_tempDirectory, "replay.csv");
@@ -369,6 +390,7 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
     {
         public Task<PricingPersistenceResult> UpsertPricingDataAsync(
             IReadOnlyList<StructuredPricingRecord> records,
+            long? ingestionJobId,
             CancellationToken cancellationToken)
         {
             if (throwOnUpsert)
