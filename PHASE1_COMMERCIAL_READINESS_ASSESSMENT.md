@@ -164,11 +164,14 @@ The codebase has strong direction (clear domain model, decimal monetary types, e
 - Promotion path to **A-range**: complete P0 blockers and most P1 items in this assessment with measurable load/perf/security evidence.
 
 ### Ideas on everything currently holding the score below 100
-- **Architecture (-17):** add modular capability bootstrapping, add async decoupling/caching for `/estimate`, and implement a versioned benefit-rule strategy registry.
-- **Financial correctness (-14):** make ingestion lineage deterministic (stable source timestamps/hashes) and add policy-level invariant checks for impossible plan designs.
-- **Database design (-22):** replace row-by-row upserts with bulk set-based ingest, define partitioning strategy for very large corpora, and reduce hot-index contention via staging + merge patterns.
-- **Ingestion pipeline (-19):** avoid full-file materialization in non-batched paths, add source-row fingerprint idempotency guarantees, and improve partial-retry/dead-letter handling.
-- **Security & production readiness (-16):** implement key rotation/revocation + secret manager integration, enforce explicit PII redaction policy, and formalize tenant isolation + perimeter controls end-to-end.
+
+| Pillar | Score | Gap to 100 | What is keeping it from 100 |
+| --- | ---: | ---: | --- |
+| Architecture Quality | 83 | 17 | Composition root remains too implementation-aware, `/estimate` still lacks async decoupling/caching, and benefit-rule strategy versioning is not fully explicit. |
+| Financial Correctness | 86 | 14 | Ingestion lineage is not fully deterministic end-to-end (stable source timestamps/hashes), and policy-level invariant checks for impossible plan designs are still incomplete. |
+| Database Design | 78 | 22 | Row-by-row upserts remain a scale bottleneck, partitioning strategy for very large corpora is not in place, and hot-index contention still needs staging+merge optimization. |
+| Ingestion Pipeline Quality | 81 | 19 | Non-batched parse paths can still materialize large files, source-row fingerprint idempotency is not fully guaranteed, and partial-retry/dead-letter handling is limited. |
+| Security & Production Readiness | 84 | 16 | Key rotation/revocation and secret manager integration are incomplete, explicit PII-redaction policy needs stronger enforcement, and end-to-end tenant/perimeter controls need formalization. |
 
 ---
 
