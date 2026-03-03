@@ -7,6 +7,9 @@ on:
       - copilot/**
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   build-test:
     runs-on: ubuntu-latest
@@ -21,10 +24,10 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Restore
-        run: dotnet restore src/HealthPilot.Api/HealthPilot.Api.csproj
+        run: dotnet restore HealthPilot.sln
 
       - name: Build
-        run: dotnet build src/HealthPilot.Api/HealthPilot.Api.csproj --configuration Release --no-restore --nologo
+        run: dotnet build HealthPilot.sln --configuration Release --no-restore --nologo
 
       - name: Test
-        run: dotnet test tests/HealthPilot.Api.Tests/HealthPilot.Api.Tests.csproj --configuration Release --nologo
+        run: dotnet test tests/HealthPilot.Api.Tests/HealthPilot.Api.Tests.csproj --configuration Release --no-build --no-restore --nologo

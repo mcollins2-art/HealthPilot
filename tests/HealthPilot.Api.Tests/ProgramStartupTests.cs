@@ -7,7 +7,7 @@ namespace HealthPilot.Api.Tests;
 
 public class ProgramStartupTests
 {
-    private static readonly object EnvironmentLock = new();
+    private static readonly object _environmentLock = new();
 
     [Fact]
     public void Production_Throws_WhenNoApiKeysConfigured()
@@ -30,7 +30,7 @@ public class ProgramStartupTests
     [InlineData("RateLimiting:QueueLimit", "-1", "RateLimiting:QueueLimit must be greater than or equal to 0")]
     public void Startup_Throws_WhenRateLimitConfigurationInvalid(string key, string value, string expectedMessage)
     {
-        lock (EnvironmentLock)
+        lock (_environmentLock)
         {
             var previous = Environment.GetEnvironmentVariable("Security__ApiKey");
             try
@@ -44,8 +44,15 @@ public class ProgramStartupTests
                         [key] = value
                     });
 
-                var ex = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
-                Assert.Contains(expectedMessage, ex.ToString());
+                try
+                {
+                    factory.CreateClient();
+                    Assert.Fail($"Expected startup to fail with message containing '{expectedMessage}'.");
+                }
+                catch (Exception ex)
+                {
+                    AssertExpectedExceptionMessage(ex, expectedMessage);
+                }
             }
             finally
             {
@@ -57,7 +64,7 @@ public class ProgramStartupTests
     [Fact]
     public void Production_Starts_WhenLegacyApiKeyConfigured()
     {
-        lock (EnvironmentLock)
+        lock (_environmentLock)
         {
             var previous = Environment.GetEnvironmentVariable("Security__ApiKey");
             try
@@ -81,7 +88,7 @@ public class ProgramStartupTests
     [Fact]
     public void Production_Starts_WhenScopedApiKeyConfigured()
     {
-        lock (EnvironmentLock)
+        lock (_environmentLock)
         {
             var previousKey = Environment.GetEnvironmentVariable("Security__ApiKeys__0__Key");
             var previousName = Environment.GetEnvironmentVariable("Security__ApiKeys__0__Name");
@@ -127,5 +134,22 @@ public class ProgramStartupTests
 
             return base.CreateHost(builder);
         }
+    }
+
+    private static void AssertExpectedExceptionMessage(Exception ex, string expectedMessage)
+    {
+        var current = ex;
+        while (current is not null)
+        {
+            if (current is InvalidOperationException)
+            {
+                Assert.Contains(expectedMessage, current.Message);
+                return;
+            }
+
+            current = current.InnerException;
+        }
+
+        Assert.Fail($"Expected InvalidOperationException containing '{expectedMessage}'. Actual: {ex}");
     }
 }
