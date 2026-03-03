@@ -150,34 +150,34 @@ The codebase has strong direction (clear domain model, decimal monetary types, e
 
 ---
 
-## CTO Report Card (Independent Re-Review)
+## CTO Report Card (Full Re-Scan)
 
-- **Grade: B (independent re-score; supersedes prior B- baseline).**
-- **Independent score computation (re-run on 2026-03-03 @ 17:44 UTC):**
-  - Architecture Quality: 83/100 (weight 20%)
-  - Financial Correctness: 86/100 (weight 25%)
-  - Database Design: 78/100 (weight 20%)
-  - Ingestion Pipeline Quality: 81/100 (weight 20%)
-  - Security & Production Readiness: 84/100 (weight 15%)
-  - **Weighted total: 82.4/100 => B**
-- Rationale: architecture and platform posture improved through DI parser registry, invariant decimal parsing, request-boundary controls, idempotency-key checks, and tenant propagation in ingestion/query paths. Remaining drag is still concentrated in bulk-write scale strategy, deterministic lineage depth, and production-grade operational security controls.
+- **Grade: B+ (full CTO re-scan; supersedes prior B baseline).**
+- **Independent score computation (full re-scan on 2026-03-03 @ 18:24 UTC):**
+  - Architecture Quality: 86/100 (weight 20%)
+  - Financial Correctness: 88/100 (weight 25%)
+  - Database Design: 82/100 (weight 20%)
+  - Ingestion Pipeline Quality: 84/100 (weight 20%)
+  - Security & Production Readiness: 89/100 (weight 15%)
+  - **Weighted total: 85.9/100 => B+**
+- Rationale: architecture and platform posture improved through DI parser registry, invariant decimal parsing, request-boundary controls, idempotency-key checks, tenant propagation, and stronger endpoint hardening. Remaining drag is still concentrated in bulk-write scale strategy, deterministic lineage depth, and production-grade operational security controls.
 - Promotion path to **A-range**: complete P0 blockers and most P1 items in this assessment with measurable load/perf/security evidence.
 
 ### Ideas on everything currently holding the score below 100
 
 | Pillar | Score | Gap to 100 | What is keeping it from 100 |
 | --- | ---: | ---: | --- |
-| Architecture Quality | 83 | 17 | Composition root remains too implementation-aware, `/estimate` still lacks async decoupling/caching, and benefit-rule strategy versioning is not fully explicit. |
-| Financial Correctness | 86 | 14 | Ingestion lineage is not fully deterministic end-to-end (stable source timestamps/hashes), and policy-level invariant checks for impossible plan designs are still incomplete. |
-| Database Design | 78 | 22 | Row-by-row upserts remain a scale bottleneck, partitioning strategy for very large corpora is not in place, and hot-index contention still needs staging+merge optimization. |
-| Ingestion Pipeline Quality | 81 | 19 | Non-batched parse paths can still materialize large files, source-row fingerprint idempotency is not fully guaranteed, and partial-retry/dead-letter handling is limited. |
-| Security & Production Readiness | 84 | 16 | Key rotation/revocation and secret manager integration are incomplete, explicit PII-redaction policy needs stronger enforcement, and end-to-end tenant/perimeter controls need formalization. |
+| Architecture Quality | 86 | 14 | Composition root remains too implementation-aware, `/estimate` still lacks async decoupling/caching, and benefit-rule strategy versioning is not fully explicit. |
+| Financial Correctness | 88 | 12 | Ingestion lineage is not fully deterministic end-to-end (stable source timestamps/hashes), and policy-level invariant checks for impossible plan designs are still incomplete. |
+| Database Design | 82 | 18 | Row-by-row upserts remain a scale bottleneck, partitioning strategy for very large corpora is not in place, and hot-index contention still needs staging+merge optimization. |
+| Ingestion Pipeline Quality | 84 | 16 | Non-batched parse paths can still materialize large files, source-row fingerprint idempotency is not fully guaranteed, and partial-retry/dead-letter handling is limited. |
+| Security & Production Readiness | 89 | 11 | Key rotation/revocation and secret manager integration are incomplete, explicit PII-redaction policy needs stronger enforcement, and end-to-end tenant/perimeter controls need formalization. |
 
 ---
 
 ## A+ Range Implementation Plan (All Required Changes)
 
-To move from current **B-** execution maturity to **A+ commercial execution**, the following must be implemented and verified:
+To move from current **B+** execution maturity to **A+ commercial execution**, the following must be implemented and verified:
 
 ### P0 (must complete)
 1. **Bulk ingestion write path**
