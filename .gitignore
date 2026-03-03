@@ -1,0 +1,13 @@
+bin/
+obj/
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.db
+TestResults/
+tmp/
+**/TestResults/
+**/coverage.cobertura.xml
+scripts/loadtest/*.json
