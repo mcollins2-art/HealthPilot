@@ -72,6 +72,7 @@ cd backend
 
 - API reference: `API_DOCUMENTATION.md`
 - Runbook: `RUNBOOK.md`
+- Commercial readiness assessment: `PHASE1_COMMERCIAL_READINESS_ASSESSMENT.md`
 
 ## Structure
 
