@@ -30,6 +30,8 @@ dotnet run --project .\src\HealthPilot.Api\HealthPilot.Api.csproj --urls "http:/
   - `/estimate` requires `estimate:read`
   - `/ingestion/import` requires `ingestion:write`
 - Rate limiting is enabled and config-driven via `RateLimiting`.
+- Unknown JSON fields are rejected to prevent overposting.
+- Copy `.env.example` to `.env` (or set equivalent environment variables in your secret store) and inject secrets at deploy time.
 
 Example scoped key config:
 
@@ -46,11 +48,13 @@ Example scoped key config:
 ## Endpoints
 
 - `GET /health` liveness probe.
+- `GET /health/live` liveness probe for orchestrators.
 - `GET /health/ready` readiness probe (DB + pending migrations).
 - `POST /estimate` estimate endpoint.
 - `POST /ingestion/import` ingestion endpoint (sync or async job queue via `async: true`).
 - `GET /ingestion/jobs/{jobId}` ingestion job lifecycle status.
 - `POST /ingestion/jobs/{jobId}/replay` deterministic replay enqueue.
+- Versioned alias: all endpoints are also available under `/api/v1/*` (for example, `/api/v1/estimate`).
 
 ## Ingestion Scale
 

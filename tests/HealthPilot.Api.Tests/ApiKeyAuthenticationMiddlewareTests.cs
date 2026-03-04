@@ -248,6 +248,30 @@ public class ApiKeyAuthenticationMiddlewareTests
 
         Assert.True(nextCalled());
         Assert.Equal("tenant-a", context.Items["TenantId"]);
+        Assert.Equal("tenant-client:tenant-a", context.Items["ApiRateLimitPartitionKey"]);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_DoesNotPartitionByTenant_WhenKeyIsNotTenantRestricted()
+    {
+        var middleware = CreateMiddleware(
+            new Dictionary<string, string?>
+            {
+                ["Security:ApiKeys:0:Name"] = "estimate-client",
+                ["Security:ApiKeys:0:Key"] = "estimate-key",
+                ["Security:ApiKeys:0:Scopes:0"] = "estimate:read"
+            },
+            isDevelopment: false,
+            out var nextCalled);
+
+        var context = CreateContext("/estimate");
+        context.Request.Headers["X-API-Key"] = "estimate-key";
+        context.Request.Headers["X-Tenant-Id"] = "tenant-arbitrary";
+
+        await middleware.InvokeAsync(context);
+
+        Assert.True(nextCalled());
+        Assert.Equal("estimate-client", context.Items["ApiRateLimitPartitionKey"]);
     }
 
     private static ApiKeyAuthenticationMiddleware CreateMiddleware(

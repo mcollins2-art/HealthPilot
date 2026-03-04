@@ -48,7 +48,7 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
         Assert.NotNull(problem);
-        Assert.Equal("Invalid request", problem!.Title);
+        Assert.Equal("One or more validation errors occurred.", problem!.Title);
     }
 
     [Fact]
@@ -70,6 +70,37 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
         var response = await scopedClient.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
         {
             FilePath = outsideFile,
+            BatchSize = 100,
+            ResumeFromCheckpoint = false
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("Invalid file path", problem!.Title);
+    }
+
+    [Fact]
+    public async Task Import_ReturnsBadRequest_WhenPathSharesAllowedRootPrefix()
+    {
+        var allowedRoot = Path.Combine(_tempDirectory, "allowed-prefix");
+        var siblingRoot = $"{allowedRoot}-sibling";
+        Directory.CreateDirectory(allowedRoot);
+        Directory.CreateDirectory(siblingRoot);
+
+        var siblingFile = Path.Combine(siblingRoot, "outside.csv");
+        await File.WriteAllTextAsync(siblingFile, "cpt_code,description\n70551,Brain MRI");
+
+        using var scopedFactory = CreateFactory(new Dictionary<string, string?>
+        {
+            ["Ingestion:AllowedRootPath"] = allowedRoot
+        });
+        using var scopedClient = scopedFactory.CreateClient();
+        scopedClient.DefaultRequestHeaders.Add("X-API-Key", "ingestion-key");
+
+        var response = await scopedClient.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
+        {
+            FilePath = siblingFile,
             BatchSize = 100,
             ResumeFromCheckpoint = false
         });

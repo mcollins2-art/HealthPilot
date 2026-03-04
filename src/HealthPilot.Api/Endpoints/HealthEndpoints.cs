@@ -5,17 +5,26 @@ namespace HealthPilot.Api.Endpoints;
 
 public static class HealthEndpoints
 {
-    public static IEndpointRouteBuilder MapHealthEndpoints(this IEndpointRouteBuilder endpoints)
+    public static IEndpointRouteBuilder MapHealthEndpoints(this IEndpointRouteBuilder endpoints, bool includeNames = true)
     {
-        endpoints.MapGet("/health", () => Results.Ok(new { status = "ok" }))
-            .WithName("Health")
+        var healthEndpoint = endpoints.MapGet("/health", () => Results.Ok(new { status = "ok" }))
             .WithTags("Health")
             .WithOpenApi();
 
-        endpoints.MapGet("/health/ready", HandleReadinessAsync)
-            .WithName("Readiness")
+        var livenessEndpoint = endpoints.MapGet("/health/live", () => Results.Ok(new { status = "live" }))
             .WithTags("Health")
             .WithOpenApi();
+
+        var readinessEndpoint = endpoints.MapGet("/health/ready", HandleReadinessAsync)
+            .WithTags("Health")
+            .WithOpenApi();
+
+        if (includeNames)
+        {
+            healthEndpoint.WithName("Health");
+            livenessEndpoint.WithName("Liveness");
+            readinessEndpoint.WithName("Readiness");
+        }
 
         return endpoints;
     }

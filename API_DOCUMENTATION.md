@@ -2,6 +2,7 @@
 
 ## Base URL
 - Local default: `http://localhost:5000`
+- Versioned routing alias: prefix any endpoint with `/api/v1` (for example `/api/v1/estimate`).
 
 ## Authentication
 - Header: `X-API-Key`
@@ -25,6 +26,11 @@
 - Purpose: liveness probe.
 - Auth: not required.
 - Success: `200 { "status": "ok" }`
+
+### `GET /health/live`
+- Purpose: explicit liveness probe endpoint for platform probes.
+- Auth: not required.
+- Success: `200 { "status": "live" }`
 
 ### `GET /health/ready`
 - Purpose: readiness probe (DB connectivity + pending migrations).
@@ -195,4 +201,5 @@ Async response:
 - `403`: API key lacks endpoint scope.
 - `429`: rate limiter rejection.
 - `400`: validation/input errors.
+- `400`: unknown JSON members are rejected.
 - `500`: unhandled server error with trace id.

@@ -14,10 +14,17 @@ public class UnhandledExceptionMiddleware(RequestDelegate next, ILogger<Unhandle
 
             if (!context.Response.HasStarted)
             {
-                context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                var isJsonRequest = context.Request.ContentType?.Contains("application/json", StringComparison.OrdinalIgnoreCase) == true;
+                var isBadRequest = ex is BadHttpRequestException
+                    || (isJsonRequest && ex is System.Text.Json.JsonException);
+                context.Response.StatusCode = isBadRequest
+                    ? StatusCodes.Status400BadRequest
+                    : StatusCodes.Status500InternalServerError;
                 await context.Response.WriteAsJsonAsync(new
                 {
-                    error = "An unexpected server error occurred.",
+                    error = isBadRequest
+                        ? "The request payload is invalid."
+                        : "An unexpected server error occurred.",
                     traceId = context.TraceIdentifier
                 });
             }

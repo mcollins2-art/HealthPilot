@@ -45,6 +45,16 @@ public class HealthEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task Liveness_ReturnsLive_ForVersionedAndUnversionedPaths()
+    {
+        var response = await _client.GetAsync("/health/live");
+        response.EnsureSuccessStatusCode();
+
+        var versionedResponse = await _client.GetAsync("/api/v1/health/live");
+        versionedResponse.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
     public async Task Readiness_ReturnsServiceUnavailable_WhenPendingMigrationsExist()
     {
         var response = await _client.GetAsync("/health/ready");

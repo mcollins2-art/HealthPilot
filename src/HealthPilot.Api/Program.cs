@@ -5,6 +5,7 @@ using HealthPilot.Api.Middleware;
 using HealthPilot.Api.Services;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -44,17 +45,29 @@ builder.Services.AddRateLimiter(options =>
     var windowSeconds = builder.Configuration.GetValue<int?>("RateLimiting:WindowSeconds") ?? 60;
     var queueLimit = builder.Configuration.GetValue<int?>("RateLimiting:QueueLimit") ?? 0;
 
-    options.AddFixedWindowLimiter("api", limiterOptions =>
+    options.AddPolicy("api", httpContext =>
     {
-        limiterOptions.PermitLimit = permitLimit;
-        limiterOptions.Window = TimeSpan.FromSeconds(windowSeconds);
-        limiterOptions.QueueLimit = queueLimit;
-        limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        var keyName = httpContext.Items.TryGetValue("ApiRateLimitPartitionKey", out var value)
+            ? value?.ToString()
+            : null;
+        var partitionKey = string.IsNullOrWhiteSpace(keyName) ? "anonymous" : keyName;
+
+        return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = permitLimit,
+            Window = TimeSpan.FromSeconds(windowSeconds),
+            QueueLimit = queueLimit,
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+        });
     });
 });
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+});
 
 var app = builder.Build();
 
@@ -73,6 +86,10 @@ if (app.Environment.IsDevelopment())
 app.MapHealthEndpoints();
 app.MapEstimateEndpoints();
 app.MapIngestionEndpoints();
+var v1 = app.MapGroup("/api/v1");
+v1.MapHealthEndpoints(includeNames: false);
+v1.MapEstimateEndpoints(includeNames: false);
+v1.MapIngestionEndpoints(includeNames: false);
 
 app.Run();
 
