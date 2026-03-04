@@ -24,7 +24,7 @@ The codebase has strong direction (clear domain model, decimal monetary types, e
 ### Critical weaknesses
 - **Composition root still knows too much implementation detail** (manual service wiring) and lacks modular bootstrapping boundaries by capability (pricing, ingestion, auth).
 - **No explicit asynchronous decoupling for estimate workloads** (single synchronous request path, no caching layer, no read models).
-- **No versioned benefit logic strategy registry** despite storing `BenefitLogicVersion` in audit logs; long-term policy evolution risk is high.
+- **Benefit logic versioning is now explicit but still immature** (currently centered on v1 strategy), so replay confidence across future policy generations is not yet proven.
 
 ### Bottom line
 - Good prototype architecture hygiene, but insufficient for multi-tenant, policy-versioned, high-throughput production systems.
@@ -152,23 +152,23 @@ The codebase has strong direction (clear domain model, decimal monetary types, e
 
 ## CTO Report Card (Full Re-Scan)
 
-- **Grade: B+ (full CTO re-scan; supersedes prior B baseline).**
-- **CTO scan score: 85.9/100.**
-- **Independent score computation (full re-scan on 2026-03-03 @ 18:24 UTC):**
-  - Architecture Quality: 86/100 (weight 20%)
+- **Grade: B+ (incremental CTO re-scan).**
+- **CTO scan score: 86.3/100.**
+- **Independent score computation (incremental re-scan on 2026-03-04 @ 02:20 UTC):**
+  - Architecture Quality: 88/100 (weight 20%)
   - Financial Correctness: 88/100 (weight 25%)
   - Database Design: 82/100 (weight 20%)
   - Ingestion Pipeline Quality: 84/100 (weight 20%)
   - Security & Production Readiness: 89/100 (weight 15%)
-  - **Weighted total: 85.9/100 => B+**
-- Rationale: architecture and platform posture improved through DI parser registry, invariant decimal parsing, request-boundary controls, idempotency-key checks, tenant propagation, and stronger endpoint hardening. Remaining drag is still concentrated in bulk-write scale strategy, deterministic lineage depth, and production-grade operational security controls.
+  - **Weighted total: 86.3/100 => B+**
+- Rationale: architecture and platform posture improved through explicit benefit simulation strategy versioning plus audit lineage stamping of active logic version, in addition to prior DI parser registry, invariant decimal parsing, request-boundary controls, idempotency-key checks, tenant propagation, and stronger endpoint hardening. Remaining drag is still concentrated in bulk-write scale strategy, deterministic lineage depth, and production-grade operational security controls.
 - Promotion path to **A-range**: complete P0 blockers and most P1 items in this assessment with measurable load/perf/security evidence.
 
 ### Ideas on everything currently holding the score below 100
 
 | Pillar | Score | Gap to 100 | What is keeping it from 100 |
 | --- | ---: | ---: | --- |
-| Architecture Quality | 86 | 14 | Composition root remains too implementation-aware, `/estimate` still lacks async decoupling/caching, and benefit-rule strategy versioning is not fully explicit. |
+| Architecture Quality | 88 | 12 | Composition root remains too implementation-aware, `/estimate` still lacks async decoupling/caching, and multi-version replay evidence for benefit rules is still limited. |
 | Financial Correctness | 88 | 12 | Ingestion lineage is not fully deterministic end-to-end (stable source timestamps/hashes), and policy-level invariant checks for impossible plan designs are still incomplete. |
 | Database Design | 82 | 18 | Row-by-row upserts remain a scale bottleneck, partitioning strategy for very large corpora is not in place, and hot-index contention still needs staging+merge optimization. |
 | Ingestion Pipeline Quality | 84 | 16 | Non-batched parse paths can still materialize large files, source-row fingerprint idempotency is not fully guaranteed, and partial-retry/dead-letter handling is limited. |
