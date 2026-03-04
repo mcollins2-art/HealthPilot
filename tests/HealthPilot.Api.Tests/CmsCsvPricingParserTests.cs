@@ -18,10 +18,10 @@ public class CmsCsvPricingParserTests : IDisposable
     {
         var filePath = Path.Combine(_tempDirectory, "parser.csv");
         await File.WriteAllTextAsync(filePath,
-            "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price\n" +
-            ",Missing CPT,imaging,Hospital A,hospital,Hoboken,NJ,07030,Plan A,1000,contracted,900\n" +
-            "70551,Brain MRI,imaging,Hospital B,hospital,Hoboken,NJ,07030, Plan A ,1200.50,contracted,980.25\n" +
-            "70450,Head CT,,Hospital C,hospital,,NJ,07031,Plan B,not-a-number,case_rate,");
+            "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price,last_updated\n" +
+            ",Missing CPT,imaging,Hospital A,hospital,Hoboken,NJ,07030,Plan A,1000,contracted,900,\n" +
+            "70551,Brain MRI,imaging,Hospital B,hospital,Hoboken,NJ,07030, Plan A ,1200.50,contracted,980.25,2026-01-01T10:00:00-05:00\n" +
+            "70450,Head CT,,Hospital C,hospital,,NJ,07031,Plan B,not-a-number,case_rate,,");
 
         var parser = new CmsCsvPricingParser();
         var rows = await parser.ParseAsync(filePath, CancellationToken.None);
@@ -34,6 +34,7 @@ public class CmsCsvPricingParserTests : IDisposable
         Assert.Equal(1200.50m, first.NegotiatedRate);
         Assert.Equal(980.25m, first.CashPrice);
         Assert.Equal("PLAN A", first.InsurerName);
+        Assert.Equal(new DateTimeOffset(2026, 1, 1, 15, 0, 0, TimeSpan.Zero), first.LastUpdated);
 
         var second = rows[1];
         Assert.Equal("70450", second.CptCode);

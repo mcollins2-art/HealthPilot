@@ -51,8 +51,8 @@ public class CmsJsonPricingParser : IPricingParser
 
     private static DateTimeOffset? ParseDateTimeOffset(string value)
     {
-        return DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed)
-            ? parsed
+        return DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed)
+            ? parsed.ToUniversalTime()
             : null;
     }
 }

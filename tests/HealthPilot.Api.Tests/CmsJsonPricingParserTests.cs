@@ -52,7 +52,8 @@ public class CmsJsonPricingParserTests : IDisposable
             "insurer": "Plan A",
             "negotiated_rate": 1234.56,
             "rate_type": "contracted",
-            "cash_price": "987.65"
+            "cash_price": "987.65",
+            "last_updated": "2026-01-01T10:00:00-05:00"
           },
           {
             "cpt_code": "70450",
@@ -86,6 +87,7 @@ public class CmsJsonPricingParserTests : IDisposable
         Assert.Equal(1234.56m, first.NegotiatedRate);
         Assert.Equal(987.65m, first.CashPrice);
         Assert.Equal("PLAN A", first.InsurerName);
+        Assert.Equal(new DateTimeOffset(2026, 1, 1, 15, 0, 0, TimeSpan.Zero), first.LastUpdated);
 
         var second = records[1];
         Assert.Equal("70450", second.CptCode);
