@@ -196,6 +196,7 @@ public class BenefitSimulationServiceTests
 		var service = new BenefitSimulationService(new[] { new TestBenefitSimulationStrategy("v-test") }, config);
 
 		Assert.Equal("v-test", service.LogicVersion);
+		Assert.Equal(12m, service.Simulate(new BenefitSimulationInput(0m, 0m, 0m, 0m, 0m)).EstimatedPatientResponsibility);
 	}
 
 	private sealed class TestBenefitSimulationStrategy(string version) : IBenefitSimulationStrategy
@@ -204,7 +205,7 @@ public class BenefitSimulationServiceTests
 
 		public BenefitSimulationResult Simulate(BenefitSimulationInput input)
 		{
-			return new BenefitSimulationResult(0m, 0m);
+			return new BenefitSimulationResult(12m, 34m);
 		}
 	}
 }
