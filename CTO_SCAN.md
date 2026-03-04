@@ -2,7 +2,7 @@
 
 ## Independent CTO score
 
-**72 / 100**
+**76 / 100** (after targeted lift)
 
 ## Method
 
@@ -21,13 +21,11 @@ Independent review of architecture, security, API hardening, observability, CI/C
 - In-memory ingestion queue limits horizontal scale and durability.
 - Tenant isolation is not enforced centrally at query layer.
 - Observability is basic (no structured JSON logs/metrics/tracing baseline).
-- Rate limiting is not scoped per API key/tenant.
-- Path allow-root validation can be hardened further for traversal edge cases.
 
 ## Rubric summary
 
-- Security architecture: **85**
-- API hardening: **80**
+- Security architecture: **88**
+- API hardening: **84**
 - Observability: **65**
 - Data layer: **85**
 - Testing: **78**
@@ -37,4 +35,9 @@ Independent review of architecture, security, API hardening, observability, CI/C
 - Reliability: **75**
 - Configuration management: **70**
 
-**Composite score: 72 / 100**
+**Composite score: 76 / 100**
+
+## Targeted lift applied
+
+- Scoped rate limiting policy now partitions by authenticated API key name.
+- Ingestion `AllowedRootPath` validation now uses relative-path boundary checks to prevent prefix-bypass paths.

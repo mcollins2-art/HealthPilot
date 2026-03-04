@@ -172,7 +172,10 @@ public static class IngestionEndpoints
         if (!string.IsNullOrWhiteSpace(allowedRoot))
         {
             var normalizedAllowedRoot = Path.GetFullPath(allowedRoot);
-            if (!fullPath.StartsWith(normalizedAllowedRoot, StringComparison.OrdinalIgnoreCase))
+            var relativePath = Path.GetRelativePath(normalizedAllowedRoot, fullPath);
+            if (relativePath.Equals("..", StringComparison.Ordinal)
+                || relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                || Path.IsPathRooted(relativePath))
             {
                 return Results.BadRequest(new ProblemDetails
                 {

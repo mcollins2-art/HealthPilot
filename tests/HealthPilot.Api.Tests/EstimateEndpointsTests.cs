@@ -94,20 +94,68 @@ public class EstimateEndpointsTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    private sealed class EstimateWebFactory(bool allowScope) : WebApplicationFactory<Program>
+    [Fact]
+    public async Task Estimate_RateLimit_IsPartitionedByApiKeyName()
+    {
+        using var factory = new EstimateWebFactory(allowScope: true, includeSecondKey: true, permitLimit: 1, windowSeconds: 120);
+        using var clientOne = factory.CreateClient();
+        using var clientTwo = factory.CreateClient();
+        clientOne.DefaultRequestHeaders.Add("X-API-Key", "estimate-key");
+        clientTwo.DefaultRequestHeaders.Add("X-API-Key", "estimate-key-2");
+
+        var first = await clientOne.PostAsJsonAsync("/estimate", CreateRequest());
+        var second = await clientTwo.PostAsJsonAsync("/estimate", CreateRequest());
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+    }
+
+    private static EstimateRequest CreateRequest() => new()
+    {
+        ZipCode = "10001",
+        Insurer = "Aetna",
+        CptCode = "70551",
+        DeductibleRemaining = 1200,
+        CoinsurancePercent = 20,
+        Copay = 50,
+        OopMaxRemaining = 3000,
+        CopayAppliesBeforeDeductible = true
+    };
+
+    private sealed class EstimateWebFactory(bool allowScope, bool includeSecondKey = false, int? permitLimit = null, int? windowSeconds = null) : WebApplicationFactory<Program>
     {
         protected override IHost CreateHost(IHostBuilder builder)
         {
             builder.UseEnvironment("Development");
             builder.ConfigureAppConfiguration((_, config) =>
             {
-                config.AddInMemoryCollection(new Dictionary<string, string?>
+                var settings = new Dictionary<string, string?>
                 {
-                    ["Security:ApiKeys:0:Name"] = "estimate-client",
-                    ["Security:ApiKeys:0:Key"] = "estimate-key",
-                    ["Security:ApiKeys:0:Scopes:0"] = allowScope ? "estimate:read" : "ingestion:write",
                     ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Port=5432;Database=healthpilot;Username=postgres;Password=postgres"
-                });
+                };
+
+                settings["Security:ApiKeys:0:Name"] = "estimate-client";
+                settings["Security:ApiKeys:0:Key"] = "estimate-key";
+                settings["Security:ApiKeys:0:Scopes:0"] = allowScope ? "estimate:read" : "ingestion:write";
+
+                if (includeSecondKey)
+                {
+                    settings["Security:ApiKeys:1:Name"] = "estimate-client-2";
+                    settings["Security:ApiKeys:1:Key"] = "estimate-key-2";
+                    settings["Security:ApiKeys:1:Scopes:0"] = "estimate:read";
+                }
+
+                if (permitLimit.HasValue)
+                {
+                    settings["RateLimiting:PermitLimit"] = permitLimit.Value.ToString();
+                }
+
+                if (windowSeconds.HasValue)
+                {
+                    settings["RateLimiting:WindowSeconds"] = windowSeconds.Value.ToString();
+                }
+
+                config.AddInMemoryCollection(settings);
             });
 
             builder.ConfigureWebHost(webBuilder =>
