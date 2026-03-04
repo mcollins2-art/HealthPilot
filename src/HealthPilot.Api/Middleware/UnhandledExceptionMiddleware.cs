@@ -14,7 +14,9 @@ public class UnhandledExceptionMiddleware(RequestDelegate next, ILogger<Unhandle
 
             if (!context.Response.HasStarted)
             {
-                var isBadRequest = ex is BadHttpRequestException or System.Text.Json.JsonException;
+                var isJsonRequest = context.Request.ContentType?.Contains("application/json", StringComparison.OrdinalIgnoreCase) == true;
+                var isBadRequest = ex is BadHttpRequestException
+                    || (isJsonRequest && ex is System.Text.Json.JsonException);
                 context.Response.StatusCode = isBadRequest
                     ? StatusCodes.Status400BadRequest
                     : StatusCodes.Status500InternalServerError;

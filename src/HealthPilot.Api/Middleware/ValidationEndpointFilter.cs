@@ -20,22 +20,24 @@ public sealed class ValidationEndpointFilter<TRequest> : IEndpointFilter
             return await next(context);
         }
 
-        var errors = validationResults
-            .Where(x => x != ValidationResult.Success)
-            .SelectMany(result =>
+        var errors = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var result in validationResults)
+        {
+            var message = result?.ErrorMessage ?? "Invalid value.";
+            var members = result?.MemberNames?.Any() == true ? result.MemberNames : [string.Empty];
+            foreach (var member in members)
             {
-                var message = result?.ErrorMessage ?? "Invalid value.";
-                return result?.MemberNames?.Any() == true
-                    ? result.MemberNames.Select(member => new KeyValuePair<string, string>(member, message))
-                    : [new KeyValuePair<string, string>(string.Empty, message)];
-            })
-            .GroupBy(x => x.Key, StringComparer.Ordinal)
-            .ToDictionary(
-                group => group.Key,
-                group => group.Select(x => x.Value).Distinct(StringComparer.Ordinal).ToArray(),
-                StringComparer.Ordinal);
+                if (!errors.TryGetValue(member, out var messages))
+                {
+                    messages = new HashSet<string>(StringComparer.Ordinal);
+                    errors[member] = messages;
+                }
 
-        return Results.ValidationProblem(errors);
+                messages.Add(message);
+            }
+        }
+
+        return Results.ValidationProblem(errors.ToDictionary(x => x.Key, x => x.Value.ToArray()));
     }
 }
 
