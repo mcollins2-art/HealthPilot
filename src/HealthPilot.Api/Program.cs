@@ -47,7 +47,7 @@ builder.Services.AddRateLimiter(options =>
 
     options.AddPolicy("api", httpContext =>
     {
-        var keyName = httpContext.Items.TryGetValue("ApiKeyName", out var value)
+        var keyName = httpContext.Items.TryGetValue("ApiRateLimitPartitionKey", out var value)
             ? value?.ToString()
             : null;
         var partitionKey = string.IsNullOrWhiteSpace(keyName) ? "anonymous" : keyName;

@@ -110,6 +110,24 @@ public class EstimateEndpointsTests
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
     }
 
+    [Fact]
+    public async Task Estimate_RateLimit_IsPartitionedByTenant_ForTenantRestrictedKey()
+    {
+        using var factory = new EstimateWebFactory(allowScope: true, tenantRestricted: true, permitLimit: 1, windowSeconds: 120);
+        using var clientOne = factory.CreateClient();
+        using var clientTwo = factory.CreateClient();
+        clientOne.DefaultRequestHeaders.Add("X-API-Key", "estimate-key");
+        clientTwo.DefaultRequestHeaders.Add("X-API-Key", "estimate-key");
+        clientOne.DefaultRequestHeaders.Add("X-Tenant-Id", "tenant-a");
+        clientTwo.DefaultRequestHeaders.Add("X-Tenant-Id", "tenant-b");
+
+        var first = await clientOne.PostAsJsonAsync("/estimate", CreateRequest());
+        var second = await clientTwo.PostAsJsonAsync("/estimate", CreateRequest());
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+    }
+
     private static EstimateRequest CreateRequest() => new()
     {
         ZipCode = "10001",
@@ -122,7 +140,7 @@ public class EstimateEndpointsTests
         CopayAppliesBeforeDeductible = true
     };
 
-    private sealed class EstimateWebFactory(bool allowScope, bool includeSecondKey = false, int? permitLimit = null, int? windowSeconds = null) : WebApplicationFactory<Program>
+    private sealed class EstimateWebFactory(bool allowScope, bool includeSecondKey = false, bool tenantRestricted = false, int? permitLimit = null, int? windowSeconds = null) : WebApplicationFactory<Program>
     {
         protected override IHost CreateHost(IHostBuilder builder)
         {
@@ -137,6 +155,11 @@ public class EstimateEndpointsTests
                 settings["Security:ApiKeys:0:Name"] = "estimate-client";
                 settings["Security:ApiKeys:0:Key"] = "estimate-key";
                 settings["Security:ApiKeys:0:Scopes:0"] = allowScope ? "estimate:read" : "ingestion:write";
+                if (tenantRestricted)
+                {
+                    settings["Security:ApiKeys:0:Tenants:0"] = "tenant-a";
+                    settings["Security:ApiKeys:0:Tenants:1"] = "tenant-b";
+                }
 
                 if (includeSecondKey)
                 {

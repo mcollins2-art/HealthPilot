@@ -2,7 +2,7 @@
 
 ## Independent CTO score
 
-**76 / 100** (after targeted lift)
+**77 / 100** (after targeted lift)
 
 ## Method
 
@@ -24,8 +24,8 @@ Independent review of architecture, security, API hardening, observability, CI/C
 
 ## Rubric summary
 
-- Security architecture: **88**
-- API hardening: **84**
+- Security architecture: **89**
+- API hardening: **85**
 - Observability: **65**
 - Data layer: **85**
 - Testing: **78**
@@ -35,9 +35,10 @@ Independent review of architecture, security, API hardening, observability, CI/C
 - Reliability: **75**
 - Configuration management: **70**
 
-**Composite score: 76 / 100**
+**Composite score: 77 / 100**
 
 ## Targeted lift applied
 
 - Scoped rate limiting policy now partitions by authenticated API key name.
+- Scoped rate limiting partition now also includes validated tenant identity for tenant-restricted keys.
 - Ingestion `AllowedRootPath` validation now uses relative-path boundary checks to prevent prefix-bypass paths.

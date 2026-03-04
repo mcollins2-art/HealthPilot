@@ -100,6 +100,9 @@ public class ApiKeyAuthenticationMiddleware(
         if (!string.IsNullOrWhiteSpace(matchedKey.Name))
         {
             context.Items["ApiKeyName"] = matchedKey.Name;
+            context.Items["ApiRateLimitPartitionKey"] = hasTenantRestrictions && !string.IsNullOrWhiteSpace(requestTenant)
+                ? $"{matchedKey.Name}:{requestTenant}"
+                : matchedKey.Name;
         }
 
         await next(context);
