@@ -1,6 +1,7 @@
 using HealthPilot.Api.Data;
 using HealthPilot.Api.Endpoints;
 using HealthPilot.Api.Ingestion;
+using HealthPilot.Api.Ingestion.Parsers;
 using HealthPilot.Api.Middleware;
 using HealthPilot.Api.Services;
 using Microsoft.AspNetCore.RateLimiting;
@@ -8,6 +9,23 @@ using Microsoft.EntityFrameworkCore;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var maxRequestBodyBytes = builder.Configuration.GetValue<long?>("Security:MaxRequestBodyBytes") ?? 1_048_576;
+if (maxRequestBodyBytes <= 0)
+{
+    throw new InvalidOperationException("Security:MaxRequestBodyBytes must be greater than 0.");
+}
+
+var defaultConnection = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(defaultConnection))
+{
+    throw new InvalidOperationException("ConnectionStrings:DefaultConnection must be configured.");
+}
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = maxRequestBodyBytes;
+});
 
 var hasLegacyApiKey = !string.IsNullOrWhiteSpace(builder.Configuration["Security:ApiKey"]);
 var hasScopedApiKeys = builder.Configuration.GetSection("Security:ApiKeys").GetChildren().Any();
@@ -22,15 +40,19 @@ if (!builder.Environment.IsDevelopment()
 // Register the PostgreSQL EF Core DbContext. This is the main persistence
 // boundary for the API and can be tuned further for pooling and resiliency.
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(defaultConnection));
 
 // Service registrations keep pricing retrieval and benefit logic separated.
 builder.Services.AddScoped<IPricingQueryService, PricingQueryService>();
 builder.Services.AddScoped<IPricingSelectionStrategy, NegotiatedMinPricingSelectionStrategy>();
+builder.Services.AddSingleton<IBenefitSimulationStrategy, BenefitSimulationStrategyV1>();
 builder.Services.AddScoped<IBenefitSimulationService, BenefitSimulationService>();
 builder.Services.AddScoped<IEstimateAuditService, EstimateAuditService>();
 builder.Services.AddScoped<IPricingPersistenceService, PricingPersistenceService>();
 builder.Services.AddScoped<IPricingLifecycleService, PricingLifecycleService>();
+builder.Services.AddScoped<IPricingParser, CmsCsvPricingParser>();
+builder.Services.AddScoped<IPricingParser, CmsJsonPricingParser>();
+builder.Services.AddScoped<IPricingParserRegistry, PricingParserRegistry>();
 builder.Services.AddScoped<PricingIngestionPipeline>();
 builder.Services.AddScoped<IIngestionCheckpointService, DbIngestionCheckpointService>();
 builder.Services.AddSingleton<IIngestionJobQueue, IngestionJobQueue>();
@@ -43,6 +65,20 @@ builder.Services.AddRateLimiter(options =>
     var permitLimit = builder.Configuration.GetValue<int?>("RateLimiting:PermitLimit") ?? 120;
     var windowSeconds = builder.Configuration.GetValue<int?>("RateLimiting:WindowSeconds") ?? 60;
     var queueLimit = builder.Configuration.GetValue<int?>("RateLimiting:QueueLimit") ?? 0;
+    if (permitLimit <= 0)
+    {
+        throw new InvalidOperationException("RateLimiting:PermitLimit must be greater than 0");
+    }
+
+    if (windowSeconds <= 0)
+    {
+        throw new InvalidOperationException("RateLimiting:WindowSeconds must be greater than 0");
+    }
+
+    if (queueLimit < 0)
+    {
+        throw new InvalidOperationException("RateLimiting:QueueLimit must be greater than or equal to 0");
+    }
 
     options.AddFixedWindowLimiter("api", limiterOptions =>
     {

@@ -131,7 +131,7 @@ public class PricingPersistenceService(
         }
 
         var uniqueFacilityRecords = records
-            .GroupBy(r => BuildFacilityKey(r.FacilityName, r.City, r.State, r.ZipCode))
+            .GroupBy(r => BuildFacilityKey(r.FacilityName, r.City, r.State, r.ZipCode, r.TenantId))
             .Select(g => g.First())
             .ToList();
 
@@ -143,18 +143,19 @@ public class PricingPersistenceService(
             .ToListAsync(cancellationToken);
 
         var existingFacilityKeys = existingFacilities
-            .Select(f => BuildFacilityKey(f.Name, f.City, f.State, f.Zip))
+            .Select(f => BuildFacilityKey(f.Name, f.City, f.State, f.Zip, f.TenantId))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var newFacilities = uniqueFacilityRecords
-            .Where(r => !existingFacilityKeys.Contains(BuildFacilityKey(r.FacilityName, r.City, r.State, r.ZipCode)))
+            .Where(r => !existingFacilityKeys.Contains(BuildFacilityKey(r.FacilityName, r.City, r.State, r.ZipCode, r.TenantId)))
             .Select(r => new Facility
             {
                 Name = r.FacilityName.Trim(),
                 Type = string.IsNullOrWhiteSpace(r.FacilityType) ? "Unknown" : r.FacilityType.Trim(),
                 City = r.City.Trim(),
                 State = r.State.Trim().ToUpperInvariant(),
-                Zip = r.ZipCode.Trim()
+                Zip = r.ZipCode.Trim(),
+                TenantId = r.TenantId ?? string.Empty
             })
             .ToList();
 
@@ -224,7 +225,7 @@ public class PricingPersistenceService(
             .ToListAsync(cancellationToken);
 
         return facilities.ToDictionary(
-            f => BuildFacilityKey(f.Name, f.City, f.State, f.Zip),
+            f => BuildFacilityKey(f.Name, f.City, f.State, f.Zip, f.TenantId),
             f => f.Id,
             StringComparer.OrdinalIgnoreCase);
     }
@@ -270,7 +271,7 @@ public class PricingPersistenceService(
                 continue;
             }
 
-            var facilityKey = BuildFacilityKey(record.FacilityName, record.City, record.State, record.ZipCode);
+            var facilityKey = BuildFacilityKey(record.FacilityName, record.City, record.State, record.ZipCode, record.TenantId);
             if (!facilityMap.TryGetValue(facilityKey, out var facilityId))
             {
                 continue;
@@ -295,7 +296,12 @@ public class PricingPersistenceService(
         {
             return 0;
         }
-        foreach (var row in candidateRows)
+        var uniqueRows = candidateRows
+            .GroupBy(r => (r.ProcedureId, r.FacilityId, r.InsurerId))
+            .Select(g => g.OrderByDescending(x => x.LastUpdated).First())
+            .ToList();
+
+        foreach (var row in uniqueRows)
         {
             await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO negotiated_rates ("ProcedureId", "FacilityId", "InsurerId", "Rate", "RateType", "LastUpdated")
@@ -308,7 +314,7 @@ public class PricingPersistenceService(
                 """, cancellationToken);
         }
 
-        return candidateRows.Count;
+        return uniqueRows.Count;
     }
 
     private async Task<int> UpsertCashPricesAsync(
@@ -331,7 +337,7 @@ public class PricingPersistenceService(
                 continue;
             }
 
-            var facilityKey = BuildFacilityKey(record.FacilityName, record.City, record.State, record.ZipCode);
+            var facilityKey = BuildFacilityKey(record.FacilityName, record.City, record.State, record.ZipCode, record.TenantId);
             if (!facilityMap.TryGetValue(facilityKey, out var facilityId))
             {
                 continue;
@@ -344,7 +350,12 @@ public class PricingPersistenceService(
         {
             return 0;
         }
-        foreach (var row in candidateRows)
+        var uniqueRows = candidateRows
+            .GroupBy(r => (r.ProcedureId, r.FacilityId))
+            .Select(g => g.OrderByDescending(x => x.LastUpdated).First())
+            .ToList();
+
+        foreach (var row in uniqueRows)
         {
             await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO cash_prices ("ProcedureId", "FacilityId", "cash_price", "LastUpdated")
@@ -356,13 +367,13 @@ public class PricingPersistenceService(
                 """, cancellationToken);
         }
 
-        return candidateRows.Count;
+        return uniqueRows.Count;
     }
 
     private static string NormalizeCpt(string cptCode) => cptCode.Trim().ToUpperInvariant();
 
-    private static string BuildFacilityKey(string name, string city, string state, string zip)
+    private static string BuildFacilityKey(string name, string city, string state, string zip, string? tenantId)
     {
-        return $"{name.Trim().ToUpperInvariant()}|{city.Trim().ToUpperInvariant()}|{state.Trim().ToUpperInvariant()}|{zip.Trim()}";
+        return $"{name.Trim().ToUpperInvariant()}|{city.Trim().ToUpperInvariant()}|{state.Trim().ToUpperInvariant()}|{zip.Trim()}|{(tenantId ?? string.Empty).Trim().ToUpperInvariant()}";
     }
 }

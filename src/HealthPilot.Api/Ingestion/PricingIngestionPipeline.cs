@@ -1,3 +1,4 @@
+using System.Globalization;
 using HealthPilot.Api.Data;
 using HealthPilot.Api.Dtos;
 using HealthPilot.Api.Ingestion.Parsers;
@@ -8,17 +9,14 @@ namespace HealthPilot.Api.Ingestion;
 public class PricingIngestionPipeline(
     AppDbContext dbContext,
     IPricingPersistenceService pricingPersistenceService,
-    IIngestionCheckpointService checkpointService)
+    IIngestionCheckpointService checkpointService,
+    IPricingParserRegistry parserRegistry)
 {
     // Dispatches parser based on file type and returns normalized records.
     public async Task<IReadOnlyList<StructuredPricingRecord>> ParseAsync(string filePath, CancellationToken cancellationToken)
     {
-        IPricingParser parser = Path.GetExtension(filePath).ToLowerInvariant() switch
-        {
-            ".json" => new CmsJsonPricingParser(),
-            ".csv" => new CmsCsvPricingParser(),
-            _ => throw new NotSupportedException($"Unsupported file extension: {Path.GetExtension(filePath)}")
-        };
+        var extension = Path.GetExtension(filePath).ToLowerInvariant();
+        IPricingParser parser = parserRegistry.ResolveByExtension(extension);
 
         return await parser.ParseAsync(filePath, cancellationToken);
     }
@@ -36,6 +34,7 @@ public class PricingIngestionPipeline(
         string filePath,
         int batchSize,
         bool resumeFromCheckpoint,
+        string? tenantId,
         CancellationToken cancellationToken)
     {
         if (batchSize < 1)
@@ -46,8 +45,8 @@ public class PricingIngestionPipeline(
         var extension = Path.GetExtension(filePath).ToLowerInvariant();
         return extension switch
         {
-            ".csv" => await ImportCsvWithBatchingAsync(filePath, batchSize, resumeFromCheckpoint, cancellationToken),
-            ".json" => await ImportJsonWithBatchingAsync(filePath, batchSize, resumeFromCheckpoint, cancellationToken),
+            ".csv" => await ImportCsvWithBatchingAsync(filePath, batchSize, resumeFromCheckpoint, tenantId, cancellationToken),
+            ".json" => await ImportJsonWithBatchingAsync(filePath, batchSize, resumeFromCheckpoint, tenantId, cancellationToken),
             _ => throw new NotSupportedException($"Unsupported file extension: {extension}")
         };
     }
@@ -56,8 +55,10 @@ public class PricingIngestionPipeline(
         string filePath,
         int batchSize,
         bool resumeFromCheckpoint,
+        string? tenantId,
         CancellationToken cancellationToken)
     {
+        var sourceLastUpdated = File.GetLastWriteTimeUtc(filePath);
         var checkpoint = await checkpointService.GetOrCreateAsync(filePath, batchSize, cancellationToken);
         var resumeOffset = resumeFromCheckpoint ? checkpoint.RowsProcessed : 0;
 
@@ -80,7 +81,7 @@ public class PricingIngestionPipeline(
                 continue;
             }
 
-            var mapped = MapRow(row);
+            var mapped = MapRow(row, sourceLastUpdated, tenantId);
             if (mapped is null)
             {
                 continue;
@@ -120,8 +121,10 @@ public class PricingIngestionPipeline(
         string filePath,
         int batchSize,
         bool resumeFromCheckpoint,
+        string? tenantId,
         CancellationToken cancellationToken)
     {
+        var sourceLastUpdated = File.GetLastWriteTimeUtc(filePath);
         var checkpoint = await checkpointService.GetOrCreateAsync(filePath, batchSize, cancellationToken);
         var resumeOffset = resumeFromCheckpoint ? checkpoint.RowsProcessed : 0;
 
@@ -142,7 +145,7 @@ public class PricingIngestionPipeline(
                 continue;
             }
 
-            var mapped = MapRow(row);
+            var mapped = MapRow(row, sourceLastUpdated, tenantId);
             if (mapped is null)
             {
                 continue;
@@ -178,7 +181,7 @@ public class PricingIngestionPipeline(
         };
     }
 
-    private static StructuredPricingRecord? MapRow(Dictionary<string, string> row)
+    private static StructuredPricingRecord? MapRow(Dictionary<string, string> row, DateTimeOffset sourceLastUpdated, string? tenantId)
     {
         string cpt = Normalizers.NormalizeCptCode(GetValue(row, "cpt_code"));
         if (string.IsNullOrWhiteSpace(cpt))
@@ -200,7 +203,8 @@ public class PricingIngestionPipeline(
             NegotiatedRate = ParseDecimal(GetValue(row, "negotiated_rate")),
             NegotiatedRateType = GetValue(row, "rate_type"),
             CashPrice = ParseDecimal(GetValue(row, "cash_price")),
-            LastUpdated = DateTimeOffset.UtcNow
+            LastUpdated = ParseDateTimeOffset(GetValue(row, "last_updated")) ?? sourceLastUpdated,
+            TenantId = tenantId
         };
     }
 
@@ -209,9 +213,13 @@ public class PricingIngestionPipeline(
         return row.TryGetValue(key, out var value) ? value : fallback;
     }
 
-    private static decimal? ParseDecimal(string value)
+    private static decimal? ParseDecimal(string value) => Normalizers.ParseDecimalInvariantOrNull(value);
+
+    private static DateTimeOffset? ParseDateTimeOffset(string value)
     {
-        return decimal.TryParse(value, out var parsed) ? parsed : null;
+        return DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed)
+            ? parsed
+            : null;
     }
 
     private static void MergeResult(PricingPersistenceResult aggregate, PricingPersistenceResult batchResult)

@@ -17,4 +17,5 @@ public class StructuredPricingRecord
     public string? NegotiatedRateType { get; set; }
     public decimal? CashPrice { get; set; }
     public DateTimeOffset LastUpdated { get; set; }
+    public string? TenantId { get; set; }
 }

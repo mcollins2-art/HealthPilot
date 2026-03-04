@@ -28,10 +28,16 @@ public static class EstimateEndpoints
         CancellationToken cancellationToken)
     {
         // Retrieve negotiated/cash pricing window for requested geography + CPT + insurer.
+        var tenantId = httpContext.Items.TryGetValue("TenantId", out var resolvedTenantId)
+            ? resolvedTenantId?.ToString()
+            : null;
+        var normalizedTenantId = tenantId ?? string.Empty;
+
         PricingSummary pricing = await pricingQueryService.GetPricingSummaryAsync(
             request.ZipCode,
             request.Insurer,
             request.CptCode,
+            normalizedTenantId,
             cancellationToken);
 
         decimal representativeRate = pricingSelectionStrategy.SelectRepresentativeRate(pricing);

@@ -2,54 +2,75 @@ namespace HealthPilot.Api.Services;
 
 public class BenefitSimulationService : IBenefitSimulationService
 {
+    private const string DefaultVersion = "v1";
+    private readonly Dictionary<string, IBenefitSimulationStrategy> _strategies;
+    private readonly string _configuredVersion;
+
+    public BenefitSimulationService()
+        : this(new IBenefitSimulationStrategy[] { new BenefitSimulationStrategyV1() }, DefaultVersion)
+    {
+    }
+
+    public BenefitSimulationService(
+        IEnumerable<IBenefitSimulationStrategy> strategies,
+        IConfiguration configuration)
+        : this(strategies, GetConfiguredVersion(configuration))
+    {
+    }
+
+    private BenefitSimulationService(
+        IEnumerable<IBenefitSimulationStrategy> strategies,
+        string? configuredVersion)
+    {
+        ArgumentNullException.ThrowIfNull(strategies);
+        var strategyList = strategies.ToList();
+        var duplicateVersions = strategyList
+            .GroupBy(x => x.Version, StringComparer.OrdinalIgnoreCase)
+            .Where(x => x.Count() > 1)
+            .Select(x => x.Key)
+            .ToList();
+        if (duplicateVersions.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Duplicate benefit simulation strategy versions were registered: {string.Join(", ", duplicateVersions)}");
+        }
+
+        _strategies = strategyList.ToDictionary(x => x.Version, x => x, StringComparer.OrdinalIgnoreCase);
+
+        if (_strategies.Count == 0)
+        {
+            throw new InvalidOperationException("At least one benefit simulation strategy must be registered.");
+        }
+
+        _configuredVersion = string.IsNullOrWhiteSpace(configuredVersion) ? DefaultVersion : configuredVersion.Trim();
+    }
+
+    public string LogicVersion => ResolveStrategy().Version;
+
     public BenefitSimulationResult Simulate(BenefitSimulationInput input)
     {
-        // Defensive clamping protects against malformed values even if validation
-        // is bypassed in future batch/async workflows.
-        var negotiatedRate = Math.Max(input.NegotiatedRate, 0m);
-        var deductibleRemaining = Math.Max(input.DeductibleRemaining, 0m);
-        var coinsurancePercent = Math.Clamp(input.CoinsurancePercent, 0m, 100m);
-        var copay = Math.Max(input.Copay, 0m);
-        var oopMaxRemaining = Math.Max(input.OopMaxRemaining, 0m);
+        return ResolveStrategy().Simulate(input);
+    }
 
-        // Edge case: member has already met out-of-pocket maximum.
-        if (oopMaxRemaining == 0m)
+    private IBenefitSimulationStrategy ResolveStrategy()
+    {
+        if (_strategies.TryGetValue(_configuredVersion, out var configured))
         {
-            return new BenefitSimulationResult(0m, MonetaryPolicy.Round(negotiatedRate));
+            return configured;
         }
 
-        decimal rawPatientResponsibility;
-
-        if (input.CopayAppliesBeforeDeductible)
+        if (_strategies.TryGetValue(DefaultVersion, out var defaultStrategy))
         {
-            // Most benefit designs apply office/service copay first, then process
-            // the remaining allowed amount through deductible and coinsurance.
-            var copayApplied = Math.Min(copay, negotiatedRate);
-            var remainingAfterCopay = negotiatedRate - copayApplied;
-
-            var deductibleApplied = Math.Min(remainingAfterCopay, deductibleRemaining);
-            var remainingAfterDeductible = remainingAfterCopay - deductibleApplied;
-
-            var coinsuranceAmount = remainingAfterDeductible * (coinsurancePercent / 100m);
-            rawPatientResponsibility = copayApplied + deductibleApplied + coinsuranceAmount;
-        }
-        else
-        {
-            // Fallback for plans that apply deductible before copay.
-            var deductibleApplied = Math.Min(negotiatedRate, deductibleRemaining);
-            var remainingAfterDeductible = negotiatedRate - deductibleApplied;
-
-            var coinsuranceAmount = remainingAfterDeductible * (coinsurancePercent / 100m);
-            rawPatientResponsibility = deductibleApplied + coinsuranceAmount + copay;
+            return defaultStrategy;
         }
 
-        var patientResponsibility = Math.Min(rawPatientResponsibility, oopMaxRemaining);
+        throw new InvalidOperationException(
+            $"Configured benefit simulation strategy '{_configuredVersion}' was not found and no '{DefaultVersion}' fallback strategy is registered.");
+    }
 
-        var insurerPayment = Math.Max(negotiatedRate - patientResponsibility, 0m);
-
-        return new BenefitSimulationResult(
-            MonetaryPolicy.Round(patientResponsibility),
-            MonetaryPolicy.Round(insurerPayment)
-        );
+    private static string? GetConfiguredVersion(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        return configuration["BenefitSimulation:LogicVersion"];
     }
 }

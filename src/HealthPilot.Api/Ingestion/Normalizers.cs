@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace HealthPilot.Api.Ingestion;
@@ -14,5 +15,12 @@ public static class Normalizers
     {
         var collapsed = Regex.Replace((raw ?? string.Empty).Trim(), "\\s+", " ");
         return collapsed.ToUpperInvariant();
+    }
+
+    public static decimal? ParseDecimalInvariantOrNull(string value)
+    {
+        return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
     }
 }

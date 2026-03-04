@@ -37,8 +37,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(x => x.City).HasMaxLength(100).IsRequired();
             entity.Property(x => x.State).HasMaxLength(2).IsRequired();
             entity.Property(x => x.Zip).HasMaxLength(10).IsRequired();
+            entity.Property(x => x.TenantId).HasMaxLength(100).HasDefaultValue(string.Empty).IsRequired();
             entity.HasIndex(x => x.Zip);
-            entity.HasIndex(x => new { x.Name, x.City, x.State, x.Zip }).IsUnique();
+            entity.HasIndex(x => new { x.Name, x.City, x.State, x.Zip, x.TenantId }).IsUnique();
         });
 
         modelBuilder.Entity<Insurer>(entity =>
@@ -146,12 +147,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(x => x.FileHashSha256).HasMaxLength(64);
             entity.Property(x => x.ParserVersion).HasMaxLength(50).IsRequired();
             entity.Property(x => x.TenantId).HasMaxLength(100);
+            entity.Property(x => x.IdempotencyKey).HasMaxLength(100);
             entity.Property(x => x.CreatedAtUtc).IsRequired();
             entity.Property(x => x.UpdatedAtUtc).IsRequired();
             entity.HasIndex(x => x.Status);
             entity.HasIndex(x => x.CreatedAtUtc);
             entity.HasIndex(x => x.ReplayOfJobId);
             entity.HasIndex(x => x.FileHashSha256);
+            entity.HasIndex(x => new { x.TenantId, x.IdempotencyKey });
         });
     }
 }

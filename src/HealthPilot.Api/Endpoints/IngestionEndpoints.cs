@@ -162,12 +162,19 @@ public static class IngestionEndpoints
         }
 
         var fullPath = Path.GetFullPath(request.FilePath);
+        var tenantId = httpContext.Items.TryGetValue("TenantId", out var resolvedTenantId)
+            ? resolvedTenantId?.ToString()
+            : null;
+        var normalizedTenantId = tenantId ?? string.Empty;
+        var idempotencyKey = httpContext.Request.Headers.TryGetValue("X-Idempotency-Key", out var resolvedIdempotencyKey)
+            ? resolvedIdempotencyKey.ToString()
+            : null;
 
         var allowedRoot = configuration["Ingestion:AllowedRootPath"];
         if (!string.IsNullOrWhiteSpace(allowedRoot))
         {
             var normalizedAllowedRoot = Path.GetFullPath(allowedRoot);
-            if (!fullPath.StartsWith(normalizedAllowedRoot, StringComparison.OrdinalIgnoreCase))
+            if (!IsPathWithinRoot(fullPath, normalizedAllowedRoot))
             {
                 return Results.BadRequest(new ProblemDetails
                 {
@@ -203,13 +210,14 @@ public static class IngestionEndpoints
         }
 
         var fileInfo = new FileInfo(fullPath);
-        const long maxImportBytes = 1_000_000_000; // 1GB
+        var maxImportBytes = configuration.GetValue<long?>("Ingestion:MaxImportBytes") ?? 1_000_000_000; // 1GB
         if (fileInfo.Length > maxImportBytes)
         {
+            var maxImportMegabytes = maxImportBytes / (1024d * 1024d);
             return Results.BadRequest(new ProblemDetails
             {
                 Title = "File too large",
-                Detail = "Maximum file size is 1GB.",
+                Detail = $"Maximum file size is {maxImportMegabytes:0.##} MB.",
                 Status = StatusCodes.Status400BadRequest,
                 Instance = httpContext.TraceIdentifier
             });
@@ -225,6 +233,51 @@ public static class IngestionEndpoints
             var parserVersion = extension == ".csv" ? "cms_csv_v1" : "cms_json_v1";
             var hash = await ComputeFileHashAsync(fullPath, cancellationToken);
 
+            var existingJob = await dbContext.IngestionJobs
+                .AsNoTracking()
+                .Where(x => x.ReplayOfJobId == null)
+                .Where(x => x.FileHashSha256 == hash)
+                .Where(x => x.TenantId == normalizedTenantId)
+                .Where(x => x.Status == "queued" || x.Status == "in_progress" || x.Status == "completed")
+                .OrderByDescending(x => x.CreatedAtUtc)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (existingJob is not null)
+            {
+                return Results.Conflict(new ProblemDetails
+                {
+                    Title = "Duplicate ingestion job",
+                    Detail = "An ingestion job for this file hash already exists for the current tenant.",
+                    Status = StatusCodes.Status409Conflict,
+                    Instance = httpContext.TraceIdentifier,
+                    Extensions = { ["jobId"] = existingJob.Id }
+                });
+            }
+
+            if (!string.IsNullOrWhiteSpace(idempotencyKey))
+            {
+                var duplicateByIdempotency = await dbContext.IngestionJobs
+                    .AsNoTracking()
+                    .Where(x => x.ReplayOfJobId == null)
+                    .Where(x => x.IdempotencyKey == idempotencyKey)
+                    .Where(x => x.TenantId == normalizedTenantId)
+                    .Where(x => x.Status == "queued" || x.Status == "in_progress" || x.Status == "completed")
+                    .OrderByDescending(x => x.CreatedAtUtc)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (duplicateByIdempotency is not null)
+                {
+                    return Results.Conflict(new ProblemDetails
+                    {
+                        Title = "Duplicate ingestion job",
+                        Detail = "An ingestion job for this idempotency key already exists for the current tenant.",
+                        Status = StatusCodes.Status409Conflict,
+                        Instance = httpContext.TraceIdentifier,
+                        Extensions = { ["jobId"] = duplicateByIdempotency.Id }
+                    });
+                }
+            }
+
             job = new IngestionJob
             {
                 CreatedAtUtc = DateTimeOffset.UtcNow,
@@ -238,7 +291,8 @@ public static class IngestionEndpoints
                 ParserVersion = parserVersion,
                 EffectiveStartUtc = request.EffectiveStartUtc,
                 EffectiveEndUtc = request.EffectiveEndUtc,
-                TenantId = httpContext.Items.TryGetValue("TenantId", out var tenantId) ? tenantId?.ToString() : null
+                TenantId = normalizedTenantId,
+                IdempotencyKey = idempotencyKey
             };
 
             dbContext.IngestionJobs.Add(job);
@@ -261,6 +315,7 @@ public static class IngestionEndpoints
                 fullPath,
                 batchSize,
                 request.ResumeFromCheckpoint,
+                normalizedTenantId,
                 cancellationToken);
 
             job.Status = "completed";
@@ -357,7 +412,8 @@ public static class IngestionEndpoints
             ParserVersion = sourceJob.ParserVersion,
             EffectiveStartUtc = sourceJob.EffectiveStartUtc,
             EffectiveEndUtc = sourceJob.EffectiveEndUtc,
-            TenantId = sourceJob.TenantId
+            TenantId = sourceJob.TenantId,
+            IdempotencyKey = null
         };
 
         dbContext.IngestionJobs.Add(replayJob);
@@ -405,5 +461,15 @@ public static class IngestionEndpoints
         await using var stream = File.OpenRead(fullPath);
         var hash = await SHA256.HashDataAsync(stream, cancellationToken);
         return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static bool IsPathWithinRoot(string candidatePath, string allowedRootPath)
+    {
+        var normalizedCandidate = Path.GetFullPath(candidatePath);
+        var normalizedRoot = Path.GetFullPath(allowedRootPath)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+
+        return normalizedCandidate.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase);
     }
 }

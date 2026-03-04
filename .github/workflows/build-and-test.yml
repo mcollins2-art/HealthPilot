@@ -1,0 +1,33 @@
+name: Build and Test
+
+on:
+  push:
+    branches:
+      - main
+      - copilot/**
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore HealthPilot.sln
+
+      - name: Build
+        run: dotnet build HealthPilot.sln --configuration Release --no-restore --nologo
+
+      - name: Test
+        run: dotnet test tests/HealthPilot.Api.Tests/HealthPilot.Api.Tests.csproj --configuration Release --no-build --no-restore --nologo

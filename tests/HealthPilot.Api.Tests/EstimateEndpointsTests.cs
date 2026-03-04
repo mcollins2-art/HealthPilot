@@ -107,7 +107,7 @@ public class EstimateEndpointsTests
 
     private sealed class StubPricingQueryService : IPricingQueryService
     {
-        public Task<PricingSummary> GetPricingSummaryAsync(string zipCode, string insurer, string cptCode, CancellationToken cancellationToken)
+        public Task<PricingSummary> GetPricingSummaryAsync(string zipCode, string insurer, string cptCode, string? tenantId, CancellationToken cancellationToken)
         {
             return Task.FromResult(new PricingSummary(100m, 200m, 80m, 160m));
         }
@@ -125,6 +125,8 @@ public class EstimateEndpointsTests
 
     private sealed class StubBenefitSimulationService : IBenefitSimulationService
     {
+        public string LogicVersion => "v1";
+
         public BenefitSimulationResult Simulate(BenefitSimulationInput input)
         {
             return new BenefitSimulationResult(42.50m, 57.50m);
