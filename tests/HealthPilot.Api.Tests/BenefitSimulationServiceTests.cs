@@ -1,4 +1,5 @@
 using HealthPilot.Api.Services;
+using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace HealthPilot.Api.Tests;
@@ -184,5 +185,26 @@ public class BenefitSimulationServiceTests
 		var result = _service.Simulate(new BenefitSimulationInput(1.005m, 0m, 100m, 0m, 10m, true));
 
 		Assert.Equal(1.01m, result.EstimatedPatientResponsibility);
+	}
+
+	[Fact]
+	public void LogicVersion_UsesConfiguredStrategyVersion()
+	{
+		var config = new ConfigurationBuilder()
+			.AddInMemoryCollection(new Dictionary<string, string?> { ["BenefitSimulation:LogicVersion"] = "v-test" })
+			.Build();
+		var service = new BenefitSimulationService([new TestBenefitSimulationStrategy("v-test")], config);
+
+		Assert.Equal("v-test", service.LogicVersion);
+	}
+
+	private sealed class TestBenefitSimulationStrategy(string version) : IBenefitSimulationStrategy
+	{
+		public string Version { get; } = version;
+
+		public BenefitSimulationResult Simulate(BenefitSimulationInput input)
+		{
+			return new BenefitSimulationResult(0m, 0m);
+		}
 	}
 }

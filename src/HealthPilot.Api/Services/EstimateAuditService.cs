@@ -6,7 +6,8 @@ namespace HealthPilot.Api.Services;
 
 public class EstimateAuditService(
     AppDbContext dbContext,
-    IPricingSelectionStrategy pricingSelectionStrategy) : IEstimateAuditService
+    IPricingSelectionStrategy pricingSelectionStrategy,
+    IBenefitSimulationService benefitSimulationService) : IEstimateAuditService
 {
     public async Task LogEstimateAsync(
         EstimateRequest request,
@@ -30,7 +31,7 @@ public class EstimateAuditService(
             CopayAppliesBeforeDeductible = request.CopayAppliesBeforeDeductible,
             EstimatedPatientResponsibility = result.EstimatedPatientResponsibility,
             InsurerPayment = result.InsurerPayment,
-            BenefitLogicVersion = $"{MonetaryPolicy.PolicyVersion}:{pricingSelectionStrategy.PolicyName}"
+            BenefitLogicVersion = $"{MonetaryPolicy.PolicyVersion}:{benefitSimulationService.LogicVersion}:{pricingSelectionStrategy.PolicyName}"
         };
 
         dbContext.EstimateAuditLogs.Add(auditLog);

@@ -125,6 +125,8 @@ public class EstimateEndpointsTests
 
     private sealed class StubBenefitSimulationService : IBenefitSimulationService
     {
+        public string LogicVersion => "v1";
+
         public BenefitSimulationResult Simulate(BenefitSimulationInput input)
         {
             return new BenefitSimulationResult(42.50m, 57.50m);

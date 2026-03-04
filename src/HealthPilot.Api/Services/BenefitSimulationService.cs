@@ -2,54 +2,56 @@ namespace HealthPilot.Api.Services;
 
 public class BenefitSimulationService : IBenefitSimulationService
 {
+    private readonly Dictionary<string, IBenefitSimulationStrategy> _strategies;
+    private readonly string _configuredVersion;
+
+    public BenefitSimulationService()
+        : this([new BenefitSimulationStrategyV1()], "v1")
+    {
+    }
+
+    public BenefitSimulationService(
+        IEnumerable<IBenefitSimulationStrategy> strategies,
+        IConfiguration configuration)
+        : this(strategies, configuration["BenefitSimulation:LogicVersion"])
+    {
+    }
+
+    private BenefitSimulationService(
+        IEnumerable<IBenefitSimulationStrategy> strategies,
+        string? configuredVersion)
+    {
+        _strategies = strategies
+            .GroupBy(x => x.Version, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+
+        if (_strategies.Count == 0)
+        {
+            throw new InvalidOperationException("At least one benefit simulation strategy must be registered.");
+        }
+
+        _configuredVersion = string.IsNullOrWhiteSpace(configuredVersion) ? "v1" : configuredVersion.Trim();
+    }
+
+    public string LogicVersion => ResolveStrategy().Version;
+
     public BenefitSimulationResult Simulate(BenefitSimulationInput input)
     {
-        // Defensive clamping protects against malformed values even if validation
-        // is bypassed in future batch/async workflows.
-        var negotiatedRate = Math.Max(input.NegotiatedRate, 0m);
-        var deductibleRemaining = Math.Max(input.DeductibleRemaining, 0m);
-        var coinsurancePercent = Math.Clamp(input.CoinsurancePercent, 0m, 100m);
-        var copay = Math.Max(input.Copay, 0m);
-        var oopMaxRemaining = Math.Max(input.OopMaxRemaining, 0m);
+        return ResolveStrategy().Simulate(input);
+    }
 
-        // Edge case: member has already met out-of-pocket maximum.
-        if (oopMaxRemaining == 0m)
+    private IBenefitSimulationStrategy ResolveStrategy()
+    {
+        if (_strategies.TryGetValue(_configuredVersion, out var configured))
         {
-            return new BenefitSimulationResult(0m, MonetaryPolicy.Round(negotiatedRate));
+            return configured;
         }
 
-        decimal rawPatientResponsibility;
-
-        if (input.CopayAppliesBeforeDeductible)
+        if (_strategies.TryGetValue("v1", out var defaultStrategy))
         {
-            // Most benefit designs apply office/service copay first, then process
-            // the remaining allowed amount through deductible and coinsurance.
-            var copayApplied = Math.Min(copay, negotiatedRate);
-            var remainingAfterCopay = negotiatedRate - copayApplied;
-
-            var deductibleApplied = Math.Min(remainingAfterCopay, deductibleRemaining);
-            var remainingAfterDeductible = remainingAfterCopay - deductibleApplied;
-
-            var coinsuranceAmount = remainingAfterDeductible * (coinsurancePercent / 100m);
-            rawPatientResponsibility = copayApplied + deductibleApplied + coinsuranceAmount;
-        }
-        else
-        {
-            // Fallback for plans that apply deductible before copay.
-            var deductibleApplied = Math.Min(negotiatedRate, deductibleRemaining);
-            var remainingAfterDeductible = negotiatedRate - deductibleApplied;
-
-            var coinsuranceAmount = remainingAfterDeductible * (coinsurancePercent / 100m);
-            rawPatientResponsibility = deductibleApplied + coinsuranceAmount + copay;
+            return defaultStrategy;
         }
 
-        var patientResponsibility = Math.Min(rawPatientResponsibility, oopMaxRemaining);
-
-        var insurerPayment = Math.Max(negotiatedRate - patientResponsibility, 0m);
-
-        return new BenefitSimulationResult(
-            MonetaryPolicy.Round(patientResponsibility),
-            MonetaryPolicy.Round(insurerPayment)
-        );
+        return _strategies.Values.First();
     }
 }

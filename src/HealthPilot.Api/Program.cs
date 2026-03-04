@@ -45,6 +45,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // Service registrations keep pricing retrieval and benefit logic separated.
 builder.Services.AddScoped<IPricingQueryService, PricingQueryService>();
 builder.Services.AddScoped<IPricingSelectionStrategy, NegotiatedMinPricingSelectionStrategy>();
+builder.Services.AddSingleton<IBenefitSimulationStrategy, BenefitSimulationStrategyV1>();
 builder.Services.AddScoped<IBenefitSimulationService, BenefitSimulationService>();
 builder.Services.AddScoped<IEstimateAuditService, EstimateAuditService>();
 builder.Services.AddScoped<IPricingPersistenceService, PricingPersistenceService>();

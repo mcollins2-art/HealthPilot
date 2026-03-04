@@ -12,7 +12,7 @@ public class EstimateAuditServiceTests
     public async Task LogEstimateAsync_PersistsAuditRecord_WithExpectedValues()
     {
         await using var dbContext = CreateDbContext();
-        var service = new EstimateAuditService(dbContext, new NegotiatedMinPricingSelectionStrategy());
+        var service = new EstimateAuditService(dbContext, new NegotiatedMinPricingSelectionStrategy(), new BenefitSimulationService());
 
         var request = new EstimateRequest
         {
@@ -51,7 +51,7 @@ public class EstimateAuditServiceTests
         Assert.True(record.CopayAppliesBeforeDeductible);
         Assert.Equal(420.25m, record.EstimatedPatientResponsibility);
         Assert.Equal(779.75m, record.InsurerPayment);
-        Assert.Equal("1.1:negotiated_min", record.BenefitLogicVersion);
+        Assert.Equal("1.1:v1:negotiated_min", record.BenefitLogicVersion);
         Assert.True(record.CreatedAt > DateTimeOffset.UtcNow.AddMinutes(-1));
     }
 
@@ -59,7 +59,7 @@ public class EstimateAuditServiceTests
     public async Task LogEstimateAsync_AllowsFalseCopayFlag_AndNegativeResponsibility()
     {
         await using var dbContext = CreateDbContext();
-        var service = new EstimateAuditService(dbContext, new NegotiatedMinPricingSelectionStrategy());
+        var service = new EstimateAuditService(dbContext, new NegotiatedMinPricingSelectionStrategy(), new BenefitSimulationService());
 
         var request = new EstimateRequest
         {

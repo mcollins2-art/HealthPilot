@@ -1,7 +1,7 @@
 namespace HealthPilot.Api.Services;
 
-public interface IBenefitSimulationService
+public interface IBenefitSimulationStrategy
 {
-    string LogicVersion { get; }
+    string Version { get; }
     BenefitSimulationResult Simulate(BenefitSimulationInput input);
 }
