@@ -193,7 +193,7 @@ public class BenefitSimulationServiceTests
 		var config = new ConfigurationBuilder()
 			.AddInMemoryCollection(new Dictionary<string, string?> { ["BenefitSimulation:LogicVersion"] = "v-test" })
 			.Build();
-		var service = new BenefitSimulationService([new TestBenefitSimulationStrategy("v-test")], config);
+		var service = new BenefitSimulationService(new[] { new TestBenefitSimulationStrategy("v-test") }, config);
 
 		Assert.Equal("v-test", service.LogicVersion);
 	}
