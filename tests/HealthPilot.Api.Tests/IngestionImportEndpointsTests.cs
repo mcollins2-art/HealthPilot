@@ -48,7 +48,7 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
         Assert.NotNull(problem);
-        Assert.Equal("Invalid request", problem!.Title);
+        Assert.Equal("One or more validation errors occurred.", problem!.Title);
     }
 
     [Fact]

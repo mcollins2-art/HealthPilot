@@ -6,14 +6,19 @@ namespace HealthPilot.Api.Endpoints;
 
 public static class EstimateEndpoints
 {
-    public static IEndpointRouteBuilder MapEstimateEndpoints(this IEndpointRouteBuilder endpoints)
+    public static IEndpointRouteBuilder MapEstimateEndpoints(this IEndpointRouteBuilder endpoints, bool includeNames = true)
     {
-        endpoints.MapPost("/estimate", HandleEstimateAsync)
+        var estimateEndpoint = endpoints.MapPost("/estimate", HandleEstimateAsync)
             .RequireApiKeyScope("estimate:read")
             .RequireRateLimiting("api")
-            .WithName("EstimateOutOfPocket")
+            .WithDtoValidation<EstimateRequest>()
             .WithTags("Estimate")
             .WithOpenApi();
+
+        if (includeNames)
+        {
+            estimateEndpoint.WithName("EstimateOutOfPocket");
+        }
 
         return endpoints;
     }

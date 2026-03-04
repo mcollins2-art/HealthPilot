@@ -12,56 +12,61 @@ namespace HealthPilot.Api.Endpoints;
 
 public static class IngestionEndpoints
 {
-    public static IEndpointRouteBuilder MapIngestionEndpoints(this IEndpointRouteBuilder endpoints)
+    public static IEndpointRouteBuilder MapIngestionEndpoints(this IEndpointRouteBuilder endpoints, bool includeNames = true)
     {
-        endpoints.MapPost("/ingestion/import", HandleImportAsync)
+        var importEndpoint = endpoints.MapPost("/ingestion/import", HandleImportAsync)
             .RequireApiKeyScope("ingestion:write")
             .RequireRateLimiting("api")
-            .WithName("ImportPricingFile")
+            .WithDtoValidation<IngestionImportRequest>()
             .WithTags("Ingestion")
             .WithOpenApi();
 
-        endpoints.MapGet("/ingestion/checkpoints/{checkpointKey}", HandleCheckpointStatusAsync)
+        var checkpointStatusEndpoint = endpoints.MapGet("/ingestion/checkpoints/{checkpointKey}", HandleCheckpointStatusAsync)
             .RequireApiKeyScope("ingestion:write")
             .RequireRateLimiting("api")
-            .WithName("GetIngestionCheckpoint")
             .WithTags("Ingestion")
             .WithOpenApi();
 
-        endpoints.MapGet("/ingestion/checkpoints", HandleCheckpointListAsync)
+        var checkpointListEndpoint = endpoints.MapGet("/ingestion/checkpoints", HandleCheckpointListAsync)
             .RequireApiKeyScope("ingestion:write")
             .RequireRateLimiting("api")
-            .WithName("ListIngestionCheckpoints")
             .WithTags("Ingestion")
             .WithOpenApi();
 
-        endpoints.MapPost("/ingestion/checkpoints/cleanup", HandleCheckpointCleanupAsync)
+        var checkpointCleanupEndpoint = endpoints.MapPost("/ingestion/checkpoints/cleanup", HandleCheckpointCleanupAsync)
             .RequireApiKeyScope("ingestion:write")
             .RequireRateLimiting("api")
-            .WithName("CleanupIngestionCheckpoints")
             .WithTags("Ingestion")
             .WithOpenApi();
 
-        endpoints.MapGet("/ingestion/jobs/{jobId:long}", HandleJobStatusAsync)
+        var jobStatusEndpoint = endpoints.MapGet("/ingestion/jobs/{jobId:long}", HandleJobStatusAsync)
             .RequireApiKeyScope("ingestion:write")
             .RequireRateLimiting("api")
-            .WithName("GetIngestionJob")
             .WithTags("Ingestion")
             .WithOpenApi();
 
-        endpoints.MapPost("/ingestion/jobs/{jobId:long}/replay", HandleReplayAsync)
+        var replayEndpoint = endpoints.MapPost("/ingestion/jobs/{jobId:long}/replay", HandleReplayAsync)
             .RequireApiKeyScope("ingestion:write")
             .RequireRateLimiting("api")
-            .WithName("ReplayIngestionJob")
             .WithTags("Ingestion")
             .WithOpenApi();
 
-        endpoints.MapPost("/ingestion/pricing/cleanup", HandlePricingCleanupAsync)
+        var pricingCleanupEndpoint = endpoints.MapPost("/ingestion/pricing/cleanup", HandlePricingCleanupAsync)
             .RequireApiKeyScope("ingestion:write")
             .RequireRateLimiting("api")
-            .WithName("CleanupPricingLifecycle")
             .WithTags("Ingestion")
             .WithOpenApi();
+
+        if (includeNames)
+        {
+            importEndpoint.WithName("ImportPricingFile");
+            checkpointStatusEndpoint.WithName("GetIngestionCheckpoint");
+            checkpointListEndpoint.WithName("ListIngestionCheckpoints");
+            checkpointCleanupEndpoint.WithName("CleanupIngestionCheckpoints");
+            jobStatusEndpoint.WithName("GetIngestionJob");
+            replayEndpoint.WithName("ReplayIngestionJob");
+            pricingCleanupEndpoint.WithName("CleanupPricingLifecycle");
+        }
 
         return endpoints;
     }

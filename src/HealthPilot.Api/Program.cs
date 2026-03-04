@@ -5,6 +5,7 @@ using HealthPilot.Api.Middleware;
 using HealthPilot.Api.Services;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -55,6 +56,10 @@ builder.Services.AddRateLimiter(options =>
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+});
 
 var app = builder.Build();
 
@@ -73,6 +78,10 @@ if (app.Environment.IsDevelopment())
 app.MapHealthEndpoints();
 app.MapEstimateEndpoints();
 app.MapIngestionEndpoints();
+var v1 = app.MapGroup("/api/v1");
+v1.MapHealthEndpoints(includeNames: false);
+v1.MapEstimateEndpoints(includeNames: false);
+v1.MapIngestionEndpoints(includeNames: false);
 
 app.Run();
 

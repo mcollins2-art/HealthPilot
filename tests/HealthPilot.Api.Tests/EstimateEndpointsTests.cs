@@ -71,6 +71,29 @@ public class EstimateEndpointsTests
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Estimate_ReturnsBadRequest_WhenRequestContainsUnknownProperty()
+    {
+        using var factory = new EstimateWebFactory(allowScope: true);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-API-Key", "estimate-key");
+
+        var response = await client.PostAsJsonAsync("/estimate", new
+        {
+            zipCode = "10001",
+            insurer = "Aetna",
+            cptCode = "70551",
+            deductibleRemaining = 1200,
+            coinsurancePercent = 20,
+            copay = 50,
+            oopMaxRemaining = 3000,
+            copayAppliesBeforeDeductible = true,
+            injected = "forbidden"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     private sealed class EstimateWebFactory(bool allowScope) : WebApplicationFactory<Program>
     {
         protected override IHost CreateHost(IHostBuilder builder)
