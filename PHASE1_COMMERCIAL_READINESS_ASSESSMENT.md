@@ -153,26 +153,26 @@ The codebase has strong direction (clear domain model, decimal monetary types, e
 ## CTO Report Card (Full Re-Scan)
 
 - **Grade: B+ (incremental CTO re-scan).**
-- **CTO scan score: 86.3/100.**
-- **Independent score computation (incremental re-scan on 2026-03-04 @ 02:20 UTC):**
-  - Architecture Quality: 88/100 (weight 20%)
-  - Financial Correctness: 88/100 (weight 25%)
-  - Database Design: 82/100 (weight 20%)
-  - Ingestion Pipeline Quality: 84/100 (weight 20%)
-  - Security & Production Readiness: 89/100 (weight 15%)
-  - **Weighted total: 86.3/100 => B+**
-- Rationale: architecture and platform posture improved through explicit benefit simulation strategy versioning plus audit lineage stamping of active logic version, in addition to prior DI parser registry, invariant decimal parsing, request-boundary controls, idempotency-key checks, tenant propagation, and stronger endpoint hardening. Remaining drag is still concentrated in bulk-write scale strategy, deterministic lineage depth, and production-grade operational security controls.
+- **CTO scan score: 87.0/100.**
+- **Independent score computation (incremental re-scan on 2026-03-04 @ 02:23 UTC):**
+  - Architecture Quality: 87/100 (weight 20%)
+  - Financial Correctness: 89/100 (weight 25%)
+  - Database Design: 84/100 (weight 20%)
+  - Ingestion Pipeline Quality: 85/100 (weight 20%)
+  - Security & Production Readiness: 90/100 (weight 15%)
+  - **Weighted total: 87.0/100 => B+**
+- Rationale: the re-review finds measurable gains in financial invariants, tenant-aware security posture, and data/index design, while keeping architecture constrained by synchronous estimate execution and limited multi-version replay evidence for benefit rules. Remaining drag is still concentrated in bulk-write scale strategy, deterministic ingestion lineage depth, and production-grade operational security controls.
 - Promotion path to **A-range**: complete P0 blockers and most P1 items in this assessment with measurable load/perf/security evidence.
 
 ### Ideas on everything currently holding the score below 100
 
 | Pillar | Score | Gap to 100 | What is keeping it from 100 |
 | --- | ---: | ---: | --- |
-| Architecture Quality | 88 | 12 | Composition root remains too implementation-aware, `/estimate` still lacks async decoupling/caching, and multi-version replay evidence for benefit rules is still limited. |
-| Financial Correctness | 88 | 12 | Ingestion lineage is not fully deterministic end-to-end (stable source timestamps/hashes), and policy-level invariant checks for impossible plan designs are still incomplete. |
-| Database Design | 82 | 18 | Row-by-row upserts remain a scale bottleneck, partitioning strategy for very large corpora is not in place, and hot-index contention still needs staging+merge optimization. |
-| Ingestion Pipeline Quality | 84 | 16 | Non-batched parse paths can still materialize large files, source-row fingerprint idempotency is not fully guaranteed, and partial-retry/dead-letter handling is limited. |
-| Security & Production Readiness | 89 | 11 | Key rotation/revocation and secret manager integration are incomplete, explicit PII-redaction policy needs stronger enforcement, and end-to-end tenant/perimeter controls need formalization. |
+| Architecture Quality | 87 | 13 | Composition root remains too implementation-aware, `/estimate` still lacks async decoupling/caching, and multi-version replay evidence for benefit rules is still limited. |
+| Financial Correctness | 89 | 11 | Ingestion lineage is not fully deterministic end-to-end (stable source timestamps/hashes), and policy-level invariant checks for impossible plan designs are still incomplete. |
+| Database Design | 84 | 16 | Row-by-row upserts remain a scale bottleneck, partitioning strategy for very large corpora is not in place, and hot-index contention still needs staging+merge optimization. |
+| Ingestion Pipeline Quality | 85 | 15 | Non-batched parse paths can still materialize large files, source-row fingerprint idempotency is not fully guaranteed, and partial-retry/dead-letter handling is limited. |
+| Security & Production Readiness | 90 | 10 | Key rotation/revocation and secret manager integration are incomplete, explicit PII-redaction policy needs stronger enforcement, and end-to-end tenant/perimeter controls need formalization. |
 
 ---
 
@@ -187,9 +187,9 @@ To move from current **B+** execution maturity to **A+ commercial execution**, t
 2. **Deterministic data lineage**
    - Record stable source-row fingerprints/hashes and source timestamps per imported row.
    - Acceptance: replay of identical source files produces identical lineage/audit outputs (excluding controlled metadata).
-3. **Benefit rule versioning framework**
-   - Introduce explicit versioned strategy registry for benefit logic and replay compatibility.
-   - Acceptance: historical estimates can be reproduced under prior logic versions.
+3. **Benefit rule replay maturity**
+   - Extend explicit versioned strategy registry with proven multi-version replay compatibility.
+   - Acceptance: historical estimates can be reproduced under prior logic versions with tests/evidence.
 4. **Tenant boundary end-to-end**
    - Carry tenant identity through auth, request context, persistence, and query filters.
    - Acceptance: cross-tenant data access is blocked by construction and validated by tests.
