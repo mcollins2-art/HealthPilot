@@ -288,11 +288,18 @@ public class PricingPersistenceServiceTests
 		await using var fixture = await TestDbFixture.CreateAsync();
 		var service = CreateService(fixture.DbContext);
 
-		var record = CreateRecord(negotiatedRate: 900m, cashPrice: 850m);
-		await service.UpsertPricingDataAsync([record, record, record], CancellationToken.None);
+		var t1 = new DateTimeOffset(2026, 01, 01, 0, 0, 0, TimeSpan.Zero);
+		var t2 = t1.AddMinutes(1);
+		var older = CreateRecord(negotiatedRate: 900m, cashPrice: 850m, lastUpdated: t1);
+		var newer = CreateRecord(negotiatedRate: 950m, cashPrice: 875m, lastUpdated: t2);
+		var result = await service.UpsertPricingDataAsync([older, newer, older], CancellationToken.None);
 
 		Assert.Equal(1, await fixture.DbContext.NegotiatedRates.CountAsync());
 		Assert.Equal(1, await fixture.DbContext.CashPrices.CountAsync());
+		Assert.Equal(1, result.NegotiatedRatesUpserted);
+		Assert.Equal(1, result.CashPricesUpserted);
+		Assert.Equal(950m, (await fixture.DbContext.NegotiatedRates.SingleAsync()).Rate);
+		Assert.Equal(875m, (await fixture.DbContext.CashPrices.SingleAsync()).CashPriceAmount);
 	}
 
 	[Fact]
@@ -442,7 +449,8 @@ public class PricingPersistenceServiceTests
 		string? insurerName = "Aetna",
 		decimal? negotiatedRate = 1200m,
 		string negotiatedRateType = "contracted",
-		decimal? cashPrice = 1000m)
+		decimal? cashPrice = 1000m,
+		DateTimeOffset? lastUpdated = null)
 	{
 		return new StructuredPricingRecord
 		{
@@ -458,7 +466,7 @@ public class PricingPersistenceServiceTests
 			NegotiatedRate = negotiatedRate,
 			NegotiatedRateType = negotiatedRateType,
 			CashPrice = cashPrice,
-			LastUpdated = DateTimeOffset.UtcNow
+			LastUpdated = lastUpdated ?? DateTimeOffset.UtcNow
 		};
 	}
 

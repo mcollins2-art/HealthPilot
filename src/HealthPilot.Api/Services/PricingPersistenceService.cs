@@ -296,7 +296,12 @@ public class PricingPersistenceService(
         {
             return 0;
         }
-        foreach (var row in candidateRows)
+        var uniqueRows = candidateRows
+            .GroupBy(r => (r.ProcedureId, r.FacilityId, r.InsurerId))
+            .Select(g => g.OrderByDescending(x => x.LastUpdated).First())
+            .ToList();
+
+        foreach (var row in uniqueRows)
         {
             await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO negotiated_rates ("ProcedureId", "FacilityId", "InsurerId", "Rate", "RateType", "LastUpdated")
@@ -309,7 +314,7 @@ public class PricingPersistenceService(
                 """, cancellationToken);
         }
 
-        return candidateRows.Count;
+        return uniqueRows.Count;
     }
 
     private async Task<int> UpsertCashPricesAsync(
@@ -345,7 +350,12 @@ public class PricingPersistenceService(
         {
             return 0;
         }
-        foreach (var row in candidateRows)
+        var uniqueRows = candidateRows
+            .GroupBy(r => (r.ProcedureId, r.FacilityId))
+            .Select(g => g.OrderByDescending(x => x.LastUpdated).First())
+            .ToList();
+
+        foreach (var row in uniqueRows)
         {
             await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO cash_prices ("ProcedureId", "FacilityId", "cash_price", "LastUpdated")
@@ -357,7 +367,7 @@ public class PricingPersistenceService(
                 """, cancellationToken);
         }
 
-        return candidateRows.Count;
+        return uniqueRows.Count;
     }
 
     private static string NormalizeCpt(string cptCode) => cptCode.Trim().ToUpperInvariant();
