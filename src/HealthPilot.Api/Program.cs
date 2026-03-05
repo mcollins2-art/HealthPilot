@@ -59,6 +59,7 @@ builder.Services.AddSwaggerGen();
 var app = builder.Build();
 
 app.UseMiddleware<UnhandledExceptionMiddleware>();
+app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseMiddleware<ApiKeyAuthenticationMiddleware>();
 app.UseRateLimiter();

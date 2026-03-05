@@ -4,10 +4,16 @@ using HealthPilot.Api.Models;
 
 namespace HealthPilot.Api.Services;
 
+/// <summary>
+/// Persists an immutable audit log record for each completed estimate request.
+/// The log captures the full request context, the negotiated rate used, and the
+/// benefit simulation output to support compliance reporting and debugging.
+/// </summary>
 public class EstimateAuditService(
     AppDbContext dbContext,
     IPricingSelectionStrategy pricingSelectionStrategy) : IEstimateAuditService
 {
+    /// <inheritdoc/>
     public async Task LogEstimateAsync(
         EstimateRequest request,
         BenefitSimulationResult result,

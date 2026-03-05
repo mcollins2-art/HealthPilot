@@ -4,6 +4,12 @@ using System.Diagnostics.Metrics;
 
 namespace HealthPilot.Api.Ingestion;
 
+/// <summary>
+/// Background service that dequeues ingestion job IDs from <see cref="IIngestionJobQueue"/>
+/// and executes each job through the <see cref="PricingIngestionPipeline"/>.
+/// Failed jobs are retried up to <see cref="Models.IngestionJob.MaxAttempts"/> times before
+/// being moved to <c>"dead_lettered"</c> status.
+/// </summary>
 public sealed class IngestionJobWorker(
     IServiceScopeFactory scopeFactory,
     IIngestionJobQueue queue,
@@ -47,11 +53,13 @@ public sealed class IngestionJobWorker(
         var job = await dbContext.IngestionJobs.SingleOrDefaultAsync(x => x.Id == jobId, cancellationToken);
         if (job is null)
         {
+            logger.LogWarning("Ingestion job {JobId} was dequeued but could not be found in the database; skipping.", jobId);
             return;
         }
 
         if (job.Status is "completed" or "dead_lettered")
         {
+            logger.LogInformation("Ingestion job {JobId} is already in terminal status '{Status}'; skipping.", jobId, job.Status);
             return;
         }
 

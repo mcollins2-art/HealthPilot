@@ -3,8 +3,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HealthPilot.Api.Services;
 
+/// <summary>
+/// Queries the normalized pricing tables to retrieve negotiated-rate and cash-price aggregates
+/// for a given zip code, insurer, and CPT procedure code.
+/// </summary>
 public class PricingQueryService(AppDbContext dbContext) : IPricingQueryService
 {
+    /// <inheritdoc/>
     public async Task<PricingSummary> GetPricingSummaryAsync(
         string zipCode,
         string insurer,
@@ -66,6 +71,7 @@ public class PricingQueryService(AppDbContext dbContext) : IPricingQueryService
         return new PricingSummary(negotiatedMin, negotiatedMax, cashMin, cashMax);
     }
 
+    /// <inheritdoc/>
     public string FormatRange(decimal? minValue, decimal? maxValue)
     {
         if (!minValue.HasValue || !maxValue.HasValue)

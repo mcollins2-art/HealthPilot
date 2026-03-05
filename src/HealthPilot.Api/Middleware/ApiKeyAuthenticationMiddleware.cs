@@ -3,6 +3,12 @@ using System.Text;
 
 namespace HealthPilot.Api.Middleware;
 
+/// <summary>
+/// ASP.NET Core middleware that enforces API key authentication on all non-health endpoints.
+/// Supports both a single legacy key (<c>Security:ApiKey</c>) and a list of scoped keys
+/// (<c>Security:ApiKeys</c>). Key comparison is performed in constant time to prevent
+/// timing attacks. Health check endpoints (<c>/health*</c>) are always allowed through.
+/// </summary>
 public class ApiKeyAuthenticationMiddleware(
     RequestDelegate next,
     IConfiguration configuration,
@@ -16,6 +22,11 @@ public class ApiKeyAuthenticationMiddleware(
         .GetSection("Security:ApiKeys")
         .Get<List<ApiKeyConfig>>() ?? [];
 
+    /// <summary>
+    /// Validates the API key header on the incoming request.
+    /// Attaches the matched key's scope and tenant context to <see cref="HttpContext.Items"/>
+    /// so downstream middleware and endpoints can make authorization decisions.
+    /// </summary>
     public async Task InvokeAsync(HttpContext context)
     {
         // Keep health checks open for probes.
@@ -141,11 +152,23 @@ public class ApiKeyAuthenticationMiddleware(
         return CryptographicOperations.FixedTimeEquals(providedBytes, configuredBytes);
     }
 
+    /// <summary>
+    /// Represents a configured API key with its associated scopes and optional tenant restrictions.
+    /// </summary>
     public class ApiKeyConfig
     {
+        /// <summary>Human-readable name for this key (used in logs and audit records).</summary>
         public string Name { get; set; } = string.Empty;
+
+        /// <summary>The secret API key value.</summary>
         public string Key { get; set; } = string.Empty;
+
+        /// <summary>Scopes granted by this key (e.g. <c>"estimate:read"</c>, <c>"ingestion:write"</c>).</summary>
         public List<string> Scopes { get; set; } = [];
+
+        /// <summary>
+        /// Optional list of tenant IDs this key is restricted to. When empty, no tenant restriction is enforced.
+        /// </summary>
         public List<string> Tenants { get; set; } = [];
     }
 }

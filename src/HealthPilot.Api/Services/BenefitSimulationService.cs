@@ -1,7 +1,12 @@
 namespace HealthPilot.Api.Services;
 
+/// <summary>
+/// Implements <see cref="IBenefitSimulationService"/> using standard insurance adjudication logic:
+/// copay → deductible → coinsurance, capped by the out-of-pocket maximum.
+/// </summary>
 public class BenefitSimulationService : IBenefitSimulationService
 {
+    /// <inheritdoc/>
     public BenefitSimulationResult Simulate(BenefitSimulationInput input)
     {
         // Defensive clamping protects against malformed values even if validation

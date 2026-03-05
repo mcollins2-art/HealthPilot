@@ -5,6 +5,11 @@ using HealthPilot.Api.Services;
 
 namespace HealthPilot.Api.Ingestion;
 
+/// <summary>
+/// Orchestrates the end-to-end pricing import workflow: file parsing, batched persistence,
+/// and checkpoint management. Supports both in-memory (full-file) and streaming (batched)
+/// import modes for CSV and JSON CMS machine-readable pricing files.
+/// </summary>
 public class PricingIngestionPipeline(
     AppDbContext dbContext,
     IPricingPersistenceService pricingPersistenceService,

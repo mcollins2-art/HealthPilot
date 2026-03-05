@@ -5,10 +5,17 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HealthPilot.Api.Services;
 
+/// <summary>
+/// Persists a batch of <see cref="StructuredPricingRecord"/> instances into the normalized
+/// pricing tables using an upsert strategy. Reference entities (procedures, facilities, insurers)
+/// are created on first encounter; negotiated rates and cash prices are upserted by natural key.
+/// All operations run within a single database transaction.
+/// </summary>
 public class PricingPersistenceService(
     AppDbContext dbContext,
     ILogger<PricingPersistenceService> logger) : IPricingPersistenceService
 {
+    /// <inheritdoc/>
     public async Task<PricingPersistenceResult> UpsertPricingDataAsync(
         IReadOnlyList<StructuredPricingRecord> records,
         CancellationToken cancellationToken)
