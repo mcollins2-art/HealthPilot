@@ -6,7 +6,7 @@ namespace HealthPilot.Api.Dtos;
 /// Request body for the <c>POST /ingestion/import</c> endpoint.
 /// Specifies the file to import along with optional batching and scheduling parameters.
 /// </summary>
-public class IngestionImportRequest
+public class IngestionImportRequest : IValidatableObject
 {
     /// <summary>
     /// Absolute or relative path to the pricing file (.csv or .json).
@@ -45,4 +45,16 @@ public class IngestionImportRequest
 
     /// <summary>UTC timestamp after which the pricing data in this file is no longer effective.</summary>
     public DateTimeOffset? EffectiveEndUtc { get; set; }
+
+    /// <inheritdoc/>
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (EffectiveStartUtc.HasValue && EffectiveEndUtc.HasValue
+            && EffectiveEndUtc.Value <= EffectiveStartUtc.Value)
+        {
+            yield return new ValidationResult(
+                "EffectiveEndUtc must be later than EffectiveStartUtc.",
+                [nameof(EffectiveEndUtc)]);
+        }
+    }
 }

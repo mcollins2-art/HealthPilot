@@ -3,8 +3,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HealthPilot.Api.Endpoints;
 
+/// <summary>
+/// Maps the <c>GET /health</c> and <c>GET /health/ready</c> endpoints used for
+/// liveness and readiness probes (e.g., Kubernetes).
+/// </summary>
 public static class HealthEndpoints
 {
+    /// <summary>
+    /// Registers the health check endpoints on the provided route builder.
+    /// </summary>
     public static IEndpointRouteBuilder MapHealthEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapGet("/health", () => Results.Ok(new { status = "ok" }))

@@ -4,8 +4,15 @@ using HealthPilot.Api.Services;
 
 namespace HealthPilot.Api.Endpoints;
 
+/// <summary>
+/// Maps the <c>POST /estimate</c> endpoint, which accepts benefit parameters and returns
+/// a pricing summary and estimated patient out-of-pocket cost.
+/// </summary>
 public static class EstimateEndpoints
 {
+    /// <summary>
+    /// Registers the estimate endpoint on the provided route builder.
+    /// </summary>
     public static IEndpointRouteBuilder MapEstimateEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapPost("/estimate", HandleEstimateAsync)
