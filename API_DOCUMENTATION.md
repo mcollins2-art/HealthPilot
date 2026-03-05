@@ -20,6 +20,23 @@
 }
 ```
 
+### Multi-tenant authentication
+When API keys have tenant restrictions configured, include the `X-Tenant-Id` header:
+```
+X-Tenant-Id: acme-corp
+```
+The header name can be customized via `Security:TenantHeader` (default: `X-Tenant-Id`).
+
+## Security Response Headers
+Every API response includes the following security headers:
+| Header | Value |
+|--------|-------|
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `DENY` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `X-Permitted-Cross-Domain-Policies` | `none` |
+| `Cache-Control` | `no-store` |
+
 ## Health
 ### `GET /health`
 - Purpose: liveness probe.
@@ -67,6 +84,9 @@ Response body:
 }
 ```
 
+Fields `negotiatedRateMin`, `negotiatedRateMax`, `cashPriceMin`, and `cashPriceMax` are `null` when no
+matching data exists in the pricing database. `negotiatedRateRange` and `cashPriceRange` return `"N/A"` in that case.
+
 ## Ingestion
 ### `POST /ingestion/import`
 - Purpose: parse and persist pricing file records.
@@ -75,7 +95,7 @@ Response body:
 - Allowed extensions: `.csv`, `.json`
 - Optional path guard: `Ingestion:AllowedRootPath`
 - Batch processing: enabled with `Ingestion:BatchSize` (default `5000`)
-- Streaming behavior: both CSV and JSON imports are processed as streaming batches to reduce peak memory usage
+- Streaming behavior: CSV and JSON files are streamed row-by-row during batch imports to reduce peak memory usage; full-document parse is only used when calling `ParseAsync` directly
 - Checkpoint/resume: import progress is checkpointed and can resume from last processed row
 - Async control plane: set `async: true` to enqueue a background ingestion job
 - Checkpoints: persisted in database for durable resume across process restarts
@@ -93,6 +113,13 @@ Request body:
   "effectiveEndUtc": "2026-12-31T23:59:59Z"
 }
 ```
+
+Validation rules:
+- `filePath`: required, 3–1024 characters; must exist; must be `.csv` or `.json`; must be within `Ingestion:AllowedRootPath` if configured
+- `batchSize`: optional, 1–50,000
+- `sourceSystem`: optional, max 100 characters
+- `effectiveEndUtc` must be later than `effectiveStartUtc` when both are provided
+- File size must not exceed 1 GB
 
 ### `GET /ingestion/checkpoints/{checkpointKey}`
 - Purpose: fetch current checkpoint status for resumable ingestion tracking.
@@ -186,13 +213,24 @@ Async response:
 - Purpose: enqueue a deterministic replay job using the same source file and provenance metadata from a prior job.
 - Auth scope: `ingestion:write`
 
+Response body:
+```json
+{
+  "status": "queued",
+  "jobId": 43,
+  "replayOfJobId": 42,
+  "traceId": "..."
+}
+```
+
 ### `POST /ingestion/pricing/cleanup?retentionDays=365`
 - Purpose: lifecycle cleanup for stale negotiated/cash pricing rows.
 - Auth scope: `ingestion:write`
 
 ## Error model
+- `400`: validation/input errors — includes cases for missing file path, file not found, unsupported extension, file exceeds 1 GB, path outside `Ingestion:AllowedRootPath`, or `effectiveEndUtc` ≤ `effectiveStartUtc`.
 - `401`: missing or invalid API key.
-- `403`: API key lacks endpoint scope.
+- `403`: API key lacks endpoint scope, or API key does not have access to the requested tenant.
 - `429`: rate limiter rejection.
-- `400`: validation/input errors.
 - `500`: unhandled server error with trace id.
+
