@@ -11,7 +11,8 @@ namespace HealthPilot.Api.Services;
 /// </summary>
 public class EstimateAuditService(
     AppDbContext dbContext,
-    IPricingSelectionStrategy pricingSelectionStrategy) : IEstimateAuditService
+    IPricingSelectionStrategy pricingSelectionStrategy,
+    ILogger<EstimateAuditService> logger) : IEstimateAuditService
 {
     /// <inheritdoc/>
     public async Task LogEstimateAsync(
@@ -41,5 +42,14 @@ public class EstimateAuditService(
 
         dbContext.EstimateAuditLogs.Add(auditLog);
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Estimate audit logged. TraceId={TraceId}, ZipCode={ZipCode}, Insurer={Insurer}, CptCode={CptCode}, NegotiatedRateUsed={NegotiatedRateUsed}, PatientResponsibility={PatientResponsibility}",
+            traceId,
+            request.ZipCode,
+            request.Insurer,
+            request.CptCode,
+            negotiatedRateUsed,
+            result.EstimatedPatientResponsibility);
     }
 }

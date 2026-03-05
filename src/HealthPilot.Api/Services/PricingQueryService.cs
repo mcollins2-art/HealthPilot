@@ -7,7 +7,7 @@ namespace HealthPilot.Api.Services;
 /// Queries the normalized pricing tables to retrieve negotiated-rate and cash-price aggregates
 /// for a given zip code, insurer, and CPT procedure code.
 /// </summary>
-public class PricingQueryService(AppDbContext dbContext) : IPricingQueryService
+public class PricingQueryService(AppDbContext dbContext, ILogger<PricingQueryService> logger) : IPricingQueryService
 {
     /// <inheritdoc/>
     public async Task<PricingSummary> GetPricingSummaryAsync(
@@ -41,6 +41,9 @@ public class PricingQueryService(AppDbContext dbContext) : IPricingQueryService
 
         if (!procedureId.HasValue || facilityIds.Count == 0)
         {
+            logger.LogDebug(
+                "No pricing data found for ZipCode={ZipCode}, CptCode={CptCode}: ProcedureFound={ProcedureFound}, FacilityCount={FacilityCount}",
+                normalizedZip, normalizedCpt, procedureId.HasValue, facilityIds.Count);
             return new PricingSummary(null, null, null, null);
         }
 
@@ -67,6 +70,16 @@ public class PricingQueryService(AppDbContext dbContext) : IPricingQueryService
             negotiatedMin = await negotiatedQuery.DefaultIfEmpty().MinAsync(cancellationToken);
             negotiatedMax = await negotiatedQuery.DefaultIfEmpty().MaxAsync(cancellationToken);
         }
+        else
+        {
+            logger.LogDebug(
+                "Insurer '{Insurer}' not found in database; negotiated rates will be null.",
+                normalizedInsurer);
+        }
+
+        logger.LogDebug(
+            "Pricing lookup complete for ZipCode={ZipCode}, Insurer={Insurer}, CptCode={CptCode}. NegotiatedMin={NegotiatedMin}, NegotiatedMax={NegotiatedMax}, CashMin={CashMin}, CashMax={CashMax}",
+            normalizedZip, normalizedInsurer, normalizedCpt, negotiatedMin, negotiatedMax, cashMin, cashMax);
 
         return new PricingSummary(negotiatedMin, negotiatedMax, cashMin, cashMax);
     }

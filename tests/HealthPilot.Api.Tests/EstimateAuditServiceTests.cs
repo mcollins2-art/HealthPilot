@@ -2,6 +2,7 @@ using HealthPilot.Api.Data;
 using HealthPilot.Api.Dtos;
 using HealthPilot.Api.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace HealthPilot.Api.Tests;
@@ -12,7 +13,7 @@ public class EstimateAuditServiceTests
     public async Task LogEstimateAsync_PersistsAuditRecord_WithExpectedValues()
     {
         await using var dbContext = CreateDbContext();
-        var service = new EstimateAuditService(dbContext, new NegotiatedMinPricingSelectionStrategy());
+        var service = new EstimateAuditService(dbContext, new NegotiatedMinPricingSelectionStrategy(), NullLogger<EstimateAuditService>.Instance);
 
         var request = new EstimateRequest
         {
@@ -59,7 +60,7 @@ public class EstimateAuditServiceTests
     public async Task LogEstimateAsync_AllowsFalseCopayFlag_AndNegativeResponsibility()
     {
         await using var dbContext = CreateDbContext();
-        var service = new EstimateAuditService(dbContext, new NegotiatedMinPricingSelectionStrategy());
+        var service = new EstimateAuditService(dbContext, new NegotiatedMinPricingSelectionStrategy(), NullLogger<EstimateAuditService>.Instance);
 
         var request = new EstimateRequest
         {
