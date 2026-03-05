@@ -23,7 +23,7 @@ public class PricingIngestionPipelineTests : IDisposable
         using var dbContext = CreateDbContext();
         var persistence = new FakePricingPersistenceService();
         var checkpoints = new FakeCheckpointService();
-        var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+        var pipeline = new PricingIngestionPipeline(persistence, checkpoints);
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
             pipeline.ImportFileWithBatchingAsync("input.csv", 0, resumeFromCheckpoint: false, CancellationToken.None));
@@ -35,7 +35,7 @@ public class PricingIngestionPipelineTests : IDisposable
         using var dbContext = CreateDbContext();
         var persistence = new FakePricingPersistenceService();
         var checkpoints = new FakeCheckpointService();
-        var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+        var pipeline = new PricingIngestionPipeline(persistence, checkpoints);
 
         await Assert.ThrowsAsync<NotSupportedException>(() =>
             pipeline.ImportFileWithBatchingAsync("input.txt", 100, resumeFromCheckpoint: false, CancellationToken.None));
@@ -70,7 +70,7 @@ public class PricingIngestionPipelineTests : IDisposable
         """);
 
         using var dbContext = CreateDbContext();
-        var pipeline = new PricingIngestionPipeline(dbContext, new FakePricingPersistenceService(), new FakeCheckpointService());
+        var pipeline = new PricingIngestionPipeline(new FakePricingPersistenceService(), new FakeCheckpointService());
 
         var csvRecords = await pipeline.ParseAsync(csvPath, CancellationToken.None);
         var jsonRecords = await pipeline.ParseAsync(jsonPath, CancellationToken.None);
@@ -88,7 +88,7 @@ public class PricingIngestionPipelineTests : IDisposable
         await File.WriteAllTextAsync(filePath, "irrelevant");
 
         using var dbContext = CreateDbContext();
-        var pipeline = new PricingIngestionPipeline(dbContext, new FakePricingPersistenceService(), new FakeCheckpointService());
+        var pipeline = new PricingIngestionPipeline(new FakePricingPersistenceService(), new FakeCheckpointService());
 
         await Assert.ThrowsAsync<NotSupportedException>(() => pipeline.ParseAsync(filePath, CancellationToken.None));
     }
@@ -106,7 +106,7 @@ public class PricingIngestionPipelineTests : IDisposable
         using var dbContext = CreateDbContext();
         var persistence = new FakePricingPersistenceService();
         var checkpoints = new FakeCheckpointService();
-        var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+        var pipeline = new PricingIngestionPipeline(persistence, checkpoints);
 
         var result = await pipeline.ImportFileWithBatchingAsync(filePath, 1, resumeFromCheckpoint: false, CancellationToken.None);
 
@@ -164,7 +164,7 @@ public class PricingIngestionPipelineTests : IDisposable
         using var dbContext = CreateDbContext();
         var persistence = new FakePricingPersistenceService();
         var checkpoints = new FakeCheckpointService(initialRowsProcessed: 1);
-        var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+        var pipeline = new PricingIngestionPipeline(persistence, checkpoints);
 
         var result = await pipeline.ImportFileWithBatchingAsync(filePath, 50, resumeFromCheckpoint: true, CancellationToken.None);
 
@@ -190,7 +190,7 @@ public class PricingIngestionPipelineTests : IDisposable
                 using var dbContext = CreateDbContext();
                 var persistence = new FakePricingPersistenceService();
                 var checkpoints = new FakeCheckpointService(initialRowsProcessed: 2);
-                var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+                var pipeline = new PricingIngestionPipeline(persistence, checkpoints);
 
                 var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: true, CancellationToken.None);
 
@@ -214,7 +214,7 @@ public class PricingIngestionPipelineTests : IDisposable
                 using var dbContext = CreateDbContext();
                 var persistence = new FakePricingPersistenceService();
                 var checkpoints = new FakeCheckpointService(initialRowsProcessed: 9);
-                var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+                var pipeline = new PricingIngestionPipeline(persistence, checkpoints);
 
                 var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: false, CancellationToken.None);
 
@@ -265,7 +265,7 @@ public class PricingIngestionPipelineTests : IDisposable
                 using var dbContext = CreateDbContext();
                 var persistence = new FakePricingPersistenceService();
                 var checkpoints = new FakeCheckpointService();
-                var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+                var pipeline = new PricingIngestionPipeline(persistence, checkpoints);
 
                 var result = await pipeline.ImportFileWithBatchingAsync(filePath, 1, resumeFromCheckpoint: true, CancellationToken.None);
 
@@ -286,7 +286,7 @@ public class PricingIngestionPipelineTests : IDisposable
                 using var dbContext = CreateDbContext();
                 var persistence = new FakePricingPersistenceService();
                 var checkpoints = new FakeCheckpointService();
-                var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+                var pipeline = new PricingIngestionPipeline(persistence, checkpoints);
 
                 var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: true, CancellationToken.None);
 
@@ -340,7 +340,7 @@ public class PricingIngestionPipelineTests : IDisposable
                 using var dbContext = CreateDbContext();
                 var persistence = new FakePricingPersistenceService();
                 var checkpoints = new FakeCheckpointService(initialRowsProcessed: 5);
-                var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+                var pipeline = new PricingIngestionPipeline(persistence, checkpoints);
 
                 var result = await pipeline.ImportFileWithBatchingAsync(filePath, 10, resumeFromCheckpoint: false, CancellationToken.None);
 
@@ -360,7 +360,7 @@ public class PricingIngestionPipelineTests : IDisposable
         using var dbContext = CreateDbContext();
         var persistence = new FakePricingPersistenceService();
         var checkpoints = new FakeCheckpointService();
-        var pipeline = new PricingIngestionPipeline(dbContext, persistence, checkpoints);
+        var pipeline = new PricingIngestionPipeline(persistence, checkpoints);
 
         var input = new List<StructuredPricingRecord>
         {

@@ -19,6 +19,11 @@ if (!builder.Environment.IsDevelopment()
     throw new InvalidOperationException("Security:ApiKey or Security:ApiKeys must be configured in non-development environments.");
 }
 
+if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("DefaultConnection")))
+{
+    throw new InvalidOperationException("ConnectionStrings:DefaultConnection must be configured.");
+}
+
 // Register the PostgreSQL EF Core DbContext. This is the main persistence
 // boundary for the API and can be tuned further for pooling and resiliency.
 builder.Services.AddDbContext<AppDbContext>(options =>

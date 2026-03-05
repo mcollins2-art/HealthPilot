@@ -1,4 +1,3 @@
-using HealthPilot.Api.Data;
 using HealthPilot.Api.Dtos;
 using HealthPilot.Api.Ingestion.Parsers;
 using HealthPilot.Api.Services;
@@ -11,11 +10,15 @@ namespace HealthPilot.Api.Ingestion;
 /// import modes for CSV and JSON CMS machine-readable pricing files.
 /// </summary>
 public class PricingIngestionPipeline(
-    AppDbContext dbContext,
     IPricingPersistenceService pricingPersistenceService,
     IIngestionCheckpointService checkpointService)
 {
-    // Dispatches parser based on file type and returns normalized records.
+    /// <summary>
+    /// Selects and invokes the appropriate parser based on the file extension.
+    /// </summary>
+    /// <param name="filePath">Absolute path to the pricing file.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A read-only list of normalized pricing records.</returns>
     public async Task<IReadOnlyList<StructuredPricingRecord>> ParseAsync(string filePath, CancellationToken cancellationToken)
     {
         IPricingParser parser = Path.GetExtension(filePath).ToLowerInvariant() switch
@@ -28,15 +31,31 @@ public class PricingIngestionPipeline(
         return await parser.ParseAsync(filePath, cancellationToken);
     }
 
-    // Placeholder for scalable upsert orchestration into normalized pricing tables.
+    /// <summary>
+    /// Persists a pre-parsed list of structured pricing records through the persistence service.
+    /// </summary>
+    /// <param name="records">Normalized records from a prior <see cref="ParseAsync"/> call.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Counts of entities created and rows upserted.</returns>
     public async Task<PricingPersistenceResult> StoreStructuredPricingDataAsync(
         IReadOnlyList<StructuredPricingRecord> records,
         CancellationToken cancellationToken)
     {
-        _ = dbContext;
         return await pricingPersistenceService.UpsertPricingDataAsync(records, cancellationToken);
     }
 
+    /// <summary>
+    /// Imports a pricing file using streaming batch processing with checkpoint/resume support.
+    /// Dispatches to CSV or JSON batched loader based on file extension.
+    /// </summary>
+    /// <param name="filePath">Absolute path to the .csv or .json pricing file.</param>
+    /// <param name="batchSize">Number of records per persistence batch (must be ≥ 1).</param>
+    /// <param name="resumeFromCheckpoint">
+    /// When <c>true</c>, resumes from the last saved checkpoint offset;
+    /// when <c>false</c>, resets the checkpoint and processes from the beginning.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An <see cref="IngestionBatchImportResult"/> with aggregate counts and checkpoint key.</returns>
     public async Task<IngestionBatchImportResult> ImportFileWithBatchingAsync(
         string filePath,
         int batchSize,

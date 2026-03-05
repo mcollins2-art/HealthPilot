@@ -4,6 +4,18 @@ using System.Text.Json;
 
 namespace HealthPilot.Api.Ingestion;
 
+/// <summary>
+/// File-system–backed implementation of <see cref="IIngestionCheckpointService"/>.
+/// Each checkpoint is stored as a JSON file in the configured <c>Ingestion:CheckpointDirectory</c>
+/// (defaulting to <c>{AppContext.BaseDirectory}/ingestion-checkpoints</c> when not set).
+/// A semaphore ensures thread-safe concurrent access to the checkpoint directory.
+/// Expired checkpoints are purged automatically during list and create operations.
+/// </summary>
+/// <remarks>
+/// This implementation is suitable for single-instance deployments.
+/// For multi-instance or high-availability deployments, use <see cref="DbIngestionCheckpointService"/>
+/// which persists checkpoints to the database.
+/// </remarks>
 public class IngestionCheckpointService(IConfiguration configuration) : IIngestionCheckpointService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
