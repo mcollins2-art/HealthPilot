@@ -21,10 +21,10 @@ public class StreamingParser
     {
         ["hospital_name"] = ["hospital_name", "provider_name", "facility_name", "hospital"],
         ["payer"] = ["payer", "insurer", "plan", "insurance_plan"],
-        ["procedure_code"] = ["procedure_code", "cpt", "cpt_code", "code"],
-        ["procedure_description"] = ["procedure_description", "description", "service_description"],
-        ["negotiated_rate"] = ["negotiated_rate", "rate", "negotiated_amount"],
-        ["cash_price"] = ["cash_price", "self_pay_price", "discounted_cash_price"],
+        ["procedure_code"] = ["procedure_code", "cpt", "cpt_code", "code", "billing_code", "cpt_hcpcs_code"],
+        ["procedure_description"] = ["procedure_description", "description", "service_description", "billing_code_description"],
+        ["negotiated_rate"] = ["negotiated_rate", "rate", "negotiated_amount", "negotiated_dollar", "standard_charge_negotiated_dollar"],
+        ["cash_price"] = ["cash_price", "self_pay_price", "discounted_cash_price", "standard_charge_discounted_cash"],
         ["location"] = ["location", "address", "city_state", "site", "city"]
     };
 

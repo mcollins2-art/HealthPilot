@@ -64,6 +64,8 @@ Example scoped key config:
 The repository includes C# data pipeline components under `src/HealthPilot.Api/data_pipeline/`:
 
 - `downloader.cs` - resilient HTTP downloader with streaming writes, progress logging, and retry handling.
+- `link_discoverer.cs` - finds machine-readable `.csv`/`.json` transparency file links from hospital transparency pages.
+- `hospital_transparency_ingestion.cs` - orchestrates discovery + download into `data/` and parses CPT-coded negotiated/cash prices.
 - `parser.cs` - streaming CSV/JSON parser that extracts:
   - `hospital_name`
   - `payer`
