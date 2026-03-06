@@ -8,6 +8,8 @@ public static class Normalizer
 {
     private static readonly Regex NonAlphanumeric = new("[^A-Za-z0-9]", RegexOptions.Compiled);
     private static readonly Regex DigitsOnly = new("\\D", RegexOptions.Compiled);
+    private static readonly Regex AlphaNumericCptPattern = new("^[A-Z]\\d{4}$", RegexOptions.Compiled);
+    private static readonly Regex NumericCptPattern = new("^\\d{5}$", RegexOptions.Compiled);
 
     public static string? NormalizeCptCode(string? rawCode)
     {
@@ -22,7 +24,7 @@ public static class Normalizer
             return null;
         }
 
-        if (Regex.IsMatch(cleaned, "^[A-Z]\\d{4}$") || Regex.IsMatch(cleaned, "^\\d{5}$"))
+        if (AlphaNumericCptPattern.IsMatch(cleaned) || NumericCptPattern.IsMatch(cleaned))
         {
             return cleaned;
         }

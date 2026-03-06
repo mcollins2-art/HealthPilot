@@ -38,6 +38,8 @@ public class Downloader(HttpClient httpClient, ILogger<Downloader> logger)
 
                 var totalBytes = response.Content.Headers.ContentLength;
                 long downloaded = 0;
+                double nextPercentLogThreshold = 10;
+                long nextByteLogThreshold = 10L * 1024 * 1024;
 
                 await using var sourceStream = await response.Content.ReadAsStreamAsync(cancellationToken);
                 await using var destinationStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, chunkSize, useAsync: true);
@@ -52,11 +54,25 @@ public class Downloader(HttpClient httpClient, ILogger<Downloader> logger)
                     var progress = new DownloadProgress(downloaded, totalBytes);
                     if (progress.PercentComplete is { } percent)
                     {
-                        logger.LogInformation("Downloading {FileName}: {ProgressPercent:F2}% ({BytesDownloaded}/{TotalBytes} bytes)", Path.GetFileName(destinationPath), percent, downloaded, totalBytes);
+                        if (percent >= nextPercentLogThreshold || downloaded == totalBytes)
+                        {
+                            logger.LogInformation("Downloading {FileName}: {ProgressPercent:F2}% ({BytesDownloaded}/{TotalBytes} bytes)", Path.GetFileName(destinationPath), percent, downloaded, totalBytes);
+                            while (percent >= nextPercentLogThreshold)
+                            {
+                                nextPercentLogThreshold += 10;
+                            }
+                        }
                     }
                     else
                     {
-                        logger.LogInformation("Downloading {FileName}: {BytesDownloaded} bytes", Path.GetFileName(destinationPath), downloaded);
+                        if (downloaded >= nextByteLogThreshold)
+                        {
+                            logger.LogInformation("Downloading {FileName}: {BytesDownloaded} bytes", Path.GetFileName(destinationPath), downloaded);
+                            while (downloaded >= nextByteLogThreshold)
+                            {
+                                nextByteLogThreshold += 10L * 1024 * 1024;
+                            }
+                        }
                     }
                 }
 

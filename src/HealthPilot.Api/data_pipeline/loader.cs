@@ -214,7 +214,12 @@ public class Loader(ILogger<Loader> logger)
         var parts = location.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (parts.Length >= 2)
         {
-            return (parts[^2], parts[^1].Length >= 2 ? parts[^1][..2].ToUpperInvariant() : parts[^1].ToUpperInvariant());
+            var statePart = parts[^1];
+            var normalizedState = statePart.Length <= 2
+                ? statePart.ToUpperInvariant()
+                : statePart[..2].ToUpperInvariant();
+            var city = string.Join(", ", parts[..^1]);
+            return (city, normalizedState);
         }
 
         return (location, string.Empty);
