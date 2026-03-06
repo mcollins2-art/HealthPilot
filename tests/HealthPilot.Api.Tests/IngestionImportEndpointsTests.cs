@@ -260,18 +260,8 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
             "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price\n" +
             "70551,Brain MRI,imaging,Test Hospital,hospital,Hoboken,NJ,07030,Plan A,1200,contracted,950");
 
-        using var tenantFactory = CreateFactory(new Dictionary<string, string?>
-        {
-            ["Security:ApiKeys:0:Name"] = "tenant-client",
-            ["Security:ApiKeys:0:Key"] = "tenant-key",
-            ["Security:ApiKeys:0:Scopes:0"] = "ingestion:write",
-            ["Security:ApiKeys:0:Tenants:0"] = "tenant-a",
-            ["Security:ApiKeys:0:Tenants:1"] = "tenant-b"
-        });
-
-        using var tenantClient = tenantFactory.CreateClient();
-        tenantClient.DefaultRequestHeaders.Add("X-API-Key", "tenant-key");
-        tenantClient.DefaultRequestHeaders.Add("X-Tenant-Id", "tenant-a");
+        using var tenantFactory = CreateTenantFactory();
+        using var tenantClient = CreateTenantClient(tenantFactory, "tenant-a");
 
         var importResponse = await tenantClient.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
         {
@@ -299,18 +289,8 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
             "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price\n" +
             "70551,Brain MRI,imaging,Test Hospital,hospital,Hoboken,NJ,07030,Plan A,1200,contracted,950");
 
-        using var tenantFactory = CreateFactory(new Dictionary<string, string?>
-        {
-            ["Security:ApiKeys:0:Name"] = "tenant-client",
-            ["Security:ApiKeys:0:Key"] = "tenant-key",
-            ["Security:ApiKeys:0:Scopes:0"] = "ingestion:write",
-            ["Security:ApiKeys:0:Tenants:0"] = "tenant-a",
-            ["Security:ApiKeys:0:Tenants:1"] = "tenant-b"
-        });
-
-        using var tenantClient = tenantFactory.CreateClient();
-        tenantClient.DefaultRequestHeaders.Add("X-API-Key", "tenant-key");
-        tenantClient.DefaultRequestHeaders.Add("X-Tenant-Id", "tenant-a");
+        using var tenantFactory = CreateTenantFactory();
+        using var tenantClient = CreateTenantClient(tenantFactory, "tenant-a");
 
         var importResponse = await tenantClient.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
         {
@@ -393,6 +373,26 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
     private ImportWebFactory CreateFactory(Dictionary<string, string?>? extraConfig = null, bool throwOnUpsert = false)
     {
         return new ImportWebFactory(_tempDirectory, extraConfig, throwOnUpsert);
+    }
+
+    private ImportWebFactory CreateTenantFactory()
+    {
+        return CreateFactory(new Dictionary<string, string?>
+        {
+            ["Security:ApiKeys:0:Name"] = "tenant-client",
+            ["Security:ApiKeys:0:Key"] = "tenant-key",
+            ["Security:ApiKeys:0:Scopes:0"] = "ingestion:write",
+            ["Security:ApiKeys:0:Tenants:0"] = "tenant-a",
+            ["Security:ApiKeys:0:Tenants:1"] = "tenant-b"
+        });
+    }
+
+    private static HttpClient CreateTenantClient(WebApplicationFactory<Program> factory, string tenantId)
+    {
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-API-Key", "tenant-key");
+        client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId);
+        return client;
     }
 
     private sealed class ImportWebFactory(
