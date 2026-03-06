@@ -265,8 +265,13 @@ public class IngestionCheckpointEndpointsTests : IAsyncLifetime
             {
                 var dbName = Guid.NewGuid().ToString("N");
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
-                services.AddDbContext<AppDbContext>(options =>
-                    options.UseInMemoryDatabase(dbName));
+                services.RemoveAll<IDbContextFactory<AppDbContext>>();
+                services.AddSingleton<DbContextOptions<AppDbContext>>(
+                    _ => new DbContextOptionsBuilder<AppDbContext>()
+                        .UseInMemoryDatabase(dbName)
+                        .Options);
+                services.AddSingleton<IDbContextFactory<AppDbContext>>(sp =>
+                    new TestDbContextFactory(sp.GetRequiredService<DbContextOptions<AppDbContext>>()));
             });
 
             return base.CreateHost(builder);

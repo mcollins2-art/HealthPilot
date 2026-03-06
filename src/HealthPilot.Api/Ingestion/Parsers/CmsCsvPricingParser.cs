@@ -2,8 +2,19 @@ using HealthPilot.Api.Dtos;
 
 namespace HealthPilot.Api.Ingestion.Parsers;
 
+/// <summary>
+/// Parses CMS machine-readable pricing files in flat CSV format
+/// (one row per negotiated rate or cash price) into <see cref="StructuredPricingRecord"/> instances.
+/// </summary>
+/// <remarks>
+/// Expected CSV columns (case-insensitive): <c>cpt_code</c>, <c>description</c>, <c>category</c>,
+/// <c>facility_name</c>, <c>facility_type</c>, <c>city</c>, <c>state</c>, <c>zip</c>,
+/// <c>insurer</c>, <c>negotiated_rate</c>, <c>rate_type</c>, <c>cash_price</c>.
+/// Rows missing a valid CPT code are silently skipped.
+/// </remarks>
 public class CmsCsvPricingParser : IPricingParser
 {
+    /// <inheritdoc/>
     public Task<IReadOnlyList<StructuredPricingRecord>> ParseAsync(string filePath, CancellationToken cancellationToken)
     {
         var rows = PricingLoader.LoadCsv(filePath);

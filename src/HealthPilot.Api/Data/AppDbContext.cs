@@ -3,15 +3,34 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HealthPilot.Api.Data;
 
+/// <summary>
+/// EF Core database context for HealthPilot. Provides access to all pricing, ingestion,
+/// and audit tables and configures the schema using Fluent API mappings.
+/// </summary>
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
+    /// <summary>Medical procedures identified by CPT code.</summary>
     public DbSet<Procedure> Procedures => Set<Procedure>();
+
+    /// <summary>Healthcare facilities that publish pricing data.</summary>
     public DbSet<Facility> Facilities => Set<Facility>();
+
+    /// <summary>Insurance companies / payers with negotiated rates.</summary>
     public DbSet<Insurer> Insurers => Set<Insurer>();
+
+    /// <summary>Contracted rates between insurers and facilities for specific procedures.</summary>
     public DbSet<NegotiatedRate> NegotiatedRates => Set<NegotiatedRate>();
+
+    /// <summary>Self-pay cash prices published by facilities for specific procedures.</summary>
     public DbSet<CashPrice> CashPrices => Set<CashPrice>();
+
+    /// <summary>Immutable audit records written for each completed <c>POST /estimate</c> request.</summary>
     public DbSet<EstimateAuditLog> EstimateAuditLogs => Set<EstimateAuditLog>();
+
+    /// <summary>Durable checkpoints tracking progress of batched pricing file imports.</summary>
     public DbSet<IngestionCheckpoint> IngestionCheckpoints => Set<IngestionCheckpoint>();
+
+    /// <summary>Lifecycle records for async and synchronous ingestion jobs.</summary>
     public DbSet<IngestionJob> IngestionJobs => Set<IngestionJob>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

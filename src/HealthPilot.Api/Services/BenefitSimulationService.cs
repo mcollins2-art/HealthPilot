@@ -1,7 +1,12 @@
 namespace HealthPilot.Api.Services;
 
-public class BenefitSimulationService : IBenefitSimulationService
+/// <summary>
+/// Implements <see cref="IBenefitSimulationService"/> using standard insurance adjudication logic:
+/// copay → deductible → coinsurance, capped by the out-of-pocket maximum.
+/// </summary>
+public class BenefitSimulationService(ILogger<BenefitSimulationService> logger) : IBenefitSimulationService
 {
+    /// <inheritdoc/>
     public BenefitSimulationResult Simulate(BenefitSimulationInput input)
     {
         // Defensive clamping protects against malformed values even if validation
@@ -15,7 +20,12 @@ public class BenefitSimulationService : IBenefitSimulationService
         // Edge case: member has already met out-of-pocket maximum.
         if (oopMaxRemaining == 0m)
         {
-            return new BenefitSimulationResult(0m, MonetaryPolicy.Round(negotiatedRate));
+            var earlyResult = new BenefitSimulationResult(0m, MonetaryPolicy.Round(negotiatedRate));
+            logger.LogDebug(
+                "OOP max already met. NegotiatedRate={NegotiatedRate}, PatientResponsibility=0, InsurerPayment={InsurerPayment}",
+                negotiatedRate,
+                earlyResult.InsurerPayment);
+            return earlyResult;
         }
 
         decimal rawPatientResponsibility;
@@ -47,9 +57,18 @@ public class BenefitSimulationService : IBenefitSimulationService
 
         var insurerPayment = Math.Max(negotiatedRate - patientResponsibility, 0m);
 
-        return new BenefitSimulationResult(
+        var result = new BenefitSimulationResult(
             MonetaryPolicy.Round(patientResponsibility),
             MonetaryPolicy.Round(insurerPayment)
         );
+
+        logger.LogDebug(
+            "Benefit simulation complete. NegotiatedRate={NegotiatedRate}, CopayAppliesBeforeDeductible={CopayOrder}, PatientResponsibility={PatientResponsibility}, InsurerPayment={InsurerPayment}",
+            negotiatedRate,
+            input.CopayAppliesBeforeDeductible,
+            result.EstimatedPatientResponsibility,
+            result.InsurerPayment);
+
+        return result;
     }
 }

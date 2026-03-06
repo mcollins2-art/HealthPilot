@@ -351,9 +351,14 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
                     services.RemoveAll<IIngestionCheckpointService>();
                     services.RemoveAll<PricingIngestionPipeline>();
                     services.RemoveAll<DbContextOptions<AppDbContext>>();
+                    services.RemoveAll<IDbContextFactory<AppDbContext>>();
 
-                    services.AddDbContext<AppDbContext>(options =>
-                        options.UseInMemoryDatabase(dbName));
+                    services.AddSingleton<DbContextOptions<AppDbContext>>(
+                        _ => new DbContextOptionsBuilder<AppDbContext>()
+                            .UseInMemoryDatabase(dbName)
+                            .Options);
+                    services.AddSingleton<IDbContextFactory<AppDbContext>>(sp =>
+                        new TestDbContextFactory(sp.GetRequiredService<DbContextOptions<AppDbContext>>()));
 
                     services.AddSingleton<IIngestionCheckpointService, TestCheckpointService>();
                     services.AddSingleton<IPricingPersistenceService>(_ => new TestPricingPersistenceService(throwOnUpsert));

@@ -5,9 +5,20 @@ using System.Text.Json;
 
 namespace HealthPilot.Api.Ingestion;
 
+/// <summary>
+/// Provides low-level file loading utilities for CMS machine-readable pricing files.
+/// Includes both in-memory loaders (for small files or parsers that need full-document access)
+/// and streaming enumerators (for large-file batch ingestion workflows).
+/// </summary>
 public static class PricingLoader
 {
-    // Generic JSON loader for CMS machine-readable files.
+    /// <summary>
+    /// Loads and parses the entire JSON file at <paramref name="filePath"/> into a <see cref="JsonElement"/>.
+    /// Suitable for CMS JSON machine-readable files that must be traversed as a full document.
+    /// </summary>
+    /// <param name="filePath">Absolute path to the JSON file.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A cloned <see cref="JsonElement"/> representing the document root.</returns>
     public static async Task<JsonElement> LoadJsonAsync(string filePath, CancellationToken cancellationToken)
     {
         await using FileStream stream = File.OpenRead(filePath);
@@ -15,7 +26,12 @@ public static class PricingLoader
         return document.RootElement.Clone();
     }
 
-    // Generic CSV loader producing key-value rows for downstream normalization.
+    /// <summary>
+    /// Loads all rows from the CSV file at <paramref name="filePath"/> into memory as key-value dictionaries.
+    /// Column keys are case-insensitive. Suitable for small files or non-streaming parsers.
+    /// </summary>
+    /// <param name="filePath">Absolute path to the CSV file.</param>
+    /// <returns>A list of rows, each represented as a case-insensitive string dictionary.</returns>
     public static List<Dictionary<string, string>> LoadCsv(string filePath)
     {
         using var reader = new StreamReader(filePath);
@@ -26,7 +42,13 @@ public static class PricingLoader
             .ToList();
     }
 
-    // Streaming CSV loader used for large-file batch ingestion workflows.
+    /// <summary>
+    /// Streams rows from the CSV file at <paramref name="filePath"/> one at a time, enabling
+    /// memory-efficient processing of large files in the batched ingestion pipeline.
+    /// Returns an empty sequence if the file has no rows.
+    /// </summary>
+    /// <param name="filePath">Absolute path to the CSV file.</param>
+    /// <returns>An enumerable of rows, each represented as a case-insensitive string dictionary.</returns>
     public static IEnumerable<Dictionary<string, string>> StreamCsvRows(string filePath)
     {
         using var reader = new StreamReader(filePath);
@@ -53,7 +75,14 @@ public static class PricingLoader
         }
     }
 
-    // Streaming JSON loader for array-based machine-readable files.
+    /// <summary>
+    /// Asynchronously streams rows from a JSON array-of-objects pricing file, enabling
+    /// memory-efficient processing of large CMS machine-readable JSON files.
+    /// Rows that fail to deserialize are silently skipped.
+    /// </summary>
+    /// <param name="filePath">Absolute path to the JSON file.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An async enumerable of rows, each represented as a case-insensitive string dictionary.</returns>
     public static async IAsyncEnumerable<Dictionary<string, string>> StreamJsonRowsAsync(
         string filePath,
         [EnumeratorCancellation] CancellationToken cancellationToken)

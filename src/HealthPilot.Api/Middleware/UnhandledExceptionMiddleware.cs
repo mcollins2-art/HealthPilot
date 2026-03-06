@@ -1,7 +1,15 @@
 namespace HealthPilot.Api.Middleware;
 
+/// <summary>
+/// Outermost middleware that catches any unhandled exception from downstream pipeline stages
+/// and returns a consistent <c>500 Internal Server Error</c> JSON response. Prevents stack
+/// traces and internal details from leaking to API clients.
+/// </summary>
 public class UnhandledExceptionMiddleware(RequestDelegate next, ILogger<UnhandledExceptionMiddleware> logger)
 {
+    /// <summary>
+    /// Invokes the next middleware and handles any unhandled exceptions.
+    /// </summary>
     public async Task InvokeAsync(HttpContext context)
     {
         try

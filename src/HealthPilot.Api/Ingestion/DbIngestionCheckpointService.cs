@@ -6,6 +6,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HealthPilot.Api.Ingestion;
 
+/// <summary>
+/// EF Core–backed implementation of <see cref="IIngestionCheckpointService"/>.
+/// Checkpoints are stored in the <c>ingestion_checkpoints</c> table and keyed by a SHA-256
+/// hash of the normalized file path and batch size.
+/// Expired checkpoints are purged automatically during <see cref="ListRecentAsync"/> calls
+/// and on explicit cleanup requests.
+/// </summary>
 public class DbIngestionCheckpointService(
     AppDbContext dbContext,
     IConfiguration configuration) : IIngestionCheckpointService

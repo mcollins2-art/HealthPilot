@@ -1,11 +1,12 @@
 using HealthPilot.Api.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace HealthPilot.Api.Tests;
 
 public class BenefitSimulationServiceTests
 {
-	private readonly BenefitSimulationService _service = new();
+	private readonly BenefitSimulationService _service = new(NullLogger<BenefitSimulationService>.Instance);
 
 	[Fact]
 	public void Simulate_WhenPartialDeductible_RemainingUsesCoinsurance()

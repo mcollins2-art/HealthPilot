@@ -10,8 +10,27 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HealthPilot.Api.Endpoints;
 
+/// <summary>
+/// Maps all ingestion control-plane endpoints:
+/// <list type="bullet">
+/// <item><c>POST /ingestion/import</c> — synchronous or asynchronous pricing file import.</item>
+/// <item><c>GET /ingestion/checkpoints/{checkpointKey}</c> — checkpoint status lookup.</item>
+/// <item><c>GET /ingestion/checkpoints</c> — recent checkpoints list.</item>
+/// <item><c>POST /ingestion/checkpoints/cleanup</c> — expired checkpoint purge.</item>
+/// <item><c>GET /ingestion/jobs/{jobId}</c> — ingestion job status.</item>
+/// <item><c>POST /ingestion/jobs/{jobId}/replay</c> — deterministic job replay.</item>
+/// <item><c>POST /ingestion/pricing/cleanup</c> — stale pricing data purge.</item>
+/// </list>
+/// All endpoints require the <c>ingestion:write</c> API key scope.
+/// </summary>
 public static class IngestionEndpoints
 {
+    /// <summary>Maximum allowed file size for a single import request (1 GB).</summary>
+    private const long MaxImportBytes = 1_000_000_000;
+
+    /// <summary>
+    /// Registers all ingestion endpoints on the provided route builder.
+    /// </summary>
     public static IEndpointRouteBuilder MapIngestionEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapPost("/ingestion/import", HandleImportAsync)
@@ -203,8 +222,7 @@ public static class IngestionEndpoints
         }
 
         var fileInfo = new FileInfo(fullPath);
-        const long maxImportBytes = 1_000_000_000; // 1GB
-        if (fileInfo.Length > maxImportBytes)
+        if (fileInfo.Length > MaxImportBytes)
         {
             return Results.BadRequest(new ProblemDetails
             {
