@@ -255,24 +255,9 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task JobStatus_ReturnsNotFound_WhenTenantDoesNotMatch()
     {
-        var csv = Path.Combine(_tempDirectory, "tenant-job-status.csv");
-        await File.WriteAllTextAsync(csv,
-            "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price\n" +
-            "70551,Brain MRI,imaging,Test Hospital,hospital,Hoboken,NJ,07030,Plan A,1200,contracted,950");
-
         using var tenantFactory = CreateTenantFactory();
         using var tenantClient = CreateTenantClient(tenantFactory, "tenant-a");
-
-        var importResponse = await tenantClient.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
-        {
-            FilePath = csv,
-            BatchSize = 100,
-            ResumeFromCheckpoint = false
-        });
-        importResponse.EnsureSuccessStatusCode();
-
-        var importPayload = await importResponse.Content.ReadFromJsonAsync<JsonElement>();
-        var jobId = importPayload.GetProperty("jobId").GetInt64();
+        var jobId = await CreateTenantJobAsync(tenantClient, "tenant-job-status.csv");
 
         tenantClient.DefaultRequestHeaders.Remove("X-Tenant-Id");
         tenantClient.DefaultRequestHeaders.Add("X-Tenant-Id", "tenant-b");
@@ -284,24 +269,9 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task Replay_ReturnsNotFound_WhenTenantDoesNotMatch()
     {
-        var csv = Path.Combine(_tempDirectory, "tenant-replay.csv");
-        await File.WriteAllTextAsync(csv,
-            "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price\n" +
-            "70551,Brain MRI,imaging,Test Hospital,hospital,Hoboken,NJ,07030,Plan A,1200,contracted,950");
-
         using var tenantFactory = CreateTenantFactory();
         using var tenantClient = CreateTenantClient(tenantFactory, "tenant-a");
-
-        var importResponse = await tenantClient.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
-        {
-            FilePath = csv,
-            BatchSize = 100,
-            ResumeFromCheckpoint = false
-        });
-        importResponse.EnsureSuccessStatusCode();
-
-        var importPayload = await importResponse.Content.ReadFromJsonAsync<JsonElement>();
-        var jobId = importPayload.GetProperty("jobId").GetInt64();
+        var jobId = await CreateTenantJobAsync(tenantClient, "tenant-replay.csv");
 
         tenantClient.DefaultRequestHeaders.Remove("X-Tenant-Id");
         tenantClient.DefaultRequestHeaders.Add("X-Tenant-Id", "tenant-b");
@@ -393,6 +363,25 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
         client.DefaultRequestHeaders.Add("X-API-Key", "tenant-key");
         client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId);
         return client;
+    }
+
+    private async Task<long> CreateTenantJobAsync(HttpClient client, string fileName)
+    {
+        var csv = Path.Combine(_tempDirectory, fileName);
+        await File.WriteAllTextAsync(csv,
+            "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price\n" +
+            "70551,Brain MRI,imaging,Test Hospital,hospital,Hoboken,NJ,07030,Plan A,1200,contracted,950");
+
+        var importResponse = await client.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
+        {
+            FilePath = csv,
+            BatchSize = 100,
+            ResumeFromCheckpoint = false
+        });
+        importResponse.EnsureSuccessStatusCode();
+
+        var importPayload = await importResponse.Content.ReadFromJsonAsync<JsonElement>();
+        return importPayload.GetProperty("jobId").GetInt64();
     }
 
     private sealed class ImportWebFactory(
