@@ -11,7 +11,9 @@ public class HospitalTransparencyIngestionWorkflow(
     StreamingParser parser,
     ILogger<HospitalTransparencyIngestionWorkflow> logger)
 {
-    private static readonly Regex NonAlphanumeric = new("[^A-Za-z0-9]", RegexOptions.Compiled);
+    // Accept numeric CPT (1-5 digits; shorter values can be left-padded by Normalizer) and
+    // HCPCS Level II style code (single letter + 4 digits).
+    private static readonly Regex CptCodeCleanupPattern = new("[^A-Za-z0-9]", RegexOptions.Compiled);
     private static readonly Regex NumericCptPattern = new("^\\d{1,5}$", RegexOptions.Compiled);
     private static readonly Regex AlphaNumericCptPattern = new("^[A-Z]\\d{4}$", RegexOptions.Compiled);
 
@@ -101,10 +103,11 @@ public class HospitalTransparencyIngestionWorkflow(
             var extension = Path.GetExtension(source.AbsolutePath);
             if (string.IsNullOrWhiteSpace(extension))
             {
-                extension = ".json";
+                extension = ".unknown";
             }
 
-            fileName = $"{source.Host}{extension}";
+            var sanitizedHost = SanitizeForFileName(source.Host);
+            fileName = $"{sanitizedHost}{extension}";
         }
 
         var baseName = Path.GetFileNameWithoutExtension(fileName);
@@ -132,7 +135,18 @@ public class HospitalTransparencyIngestionWorkflow(
             return false;
         }
 
-        var cleaned = NonAlphanumeric.Replace(rawCode.Trim().ToUpperInvariant(), string.Empty);
+        var cleaned = CptCodeCleanupPattern.Replace(rawCode.Trim(), string.Empty).ToUpperInvariant();
         return NumericCptPattern.IsMatch(cleaned) || AlphaNumericCptPattern.IsMatch(cleaned);
+    }
+
+    private static string SanitizeForFileName(string raw)
+    {
+        var sanitized = raw;
+        foreach (var character in Path.GetInvalidFileNameChars())
+        {
+            sanitized = sanitized.Replace(character, '_');
+        }
+
+        return string.IsNullOrWhiteSpace(sanitized) ? "unnamed" : sanitized;
     }
 }

@@ -115,13 +115,15 @@ public class HospitalTransparencyIngestionWorkflowTests
         var parser = new StreamingParser();
         var workflow = new HospitalTransparencyIngestionWorkflow(discoverer, downloader, parser, loggerFactory.CreateLogger<HospitalTransparencyIngestionWorkflow>());
 
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "healthpilot-hpt-downloads", Guid.NewGuid().ToString("N"));
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "healthpilot-transparency-downloads", Guid.NewGuid().ToString("N"));
 
         try
         {
             var records = await workflow.DownloadAndParseCptRatesAsync([transparencyPage], tempDirectory);
 
             Assert.Equal(2, records.Count);
+            Assert.DoesNotContain(records, record => record.ProcedureCode == "70-450");
+            Assert.DoesNotContain(records, record => string.Equals(record.ProcedureCode, "N/A", StringComparison.OrdinalIgnoreCase));
             Assert.Contains(records, record => record.ProcedureCode == "70450" && record.NegotiatedRate == 450.25m && record.CashPrice == 250.10m);
             Assert.Contains(records, record => record.ProcedureCode == "70551" && record.NegotiatedRate == 900.5m && record.CashPrice == 700m);
 

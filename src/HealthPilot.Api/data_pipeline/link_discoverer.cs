@@ -7,7 +7,7 @@ namespace HealthPilot.Api.DataPipeline;
 public class TransparencyMachineReadableLinkDiscoverer(HttpClient httpClient, ILogger<TransparencyMachineReadableLinkDiscoverer> logger)
 {
     private static readonly Regex HrefRegex = new(
-        "href\\s*=\\s*[\"'](?<href>[^\"'#>]+)[\"']",
+        "href\\s*=\\s*(?:\"(?<href_double_quoted>[^\"]+)\"|'(?<href_single_quoted>[^']+)'|(?<href_unquoted>[^\\s>]+))",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public async Task<IReadOnlyList<Uri>> DiscoverAsync(Uri transparencyPage, CancellationToken cancellationToken = default)
@@ -19,7 +19,18 @@ public class TransparencyMachineReadableLinkDiscoverer(HttpClient httpClient, IL
         var links = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (Match match in HrefRegex.Matches(html))
         {
-            var rawHref = WebUtility.HtmlDecode(match.Groups["href"].Value).Trim();
+            var rawHref = match.Groups["href_double_quoted"].Value;
+            if (string.IsNullOrWhiteSpace(rawHref))
+            {
+                rawHref = match.Groups["href_single_quoted"].Value;
+            }
+
+            if (string.IsNullOrWhiteSpace(rawHref))
+            {
+                rawHref = match.Groups["href_unquoted"].Value;
+            }
+
+            rawHref = WebUtility.HtmlDecode(rawHref).Trim();
             if (string.IsNullOrWhiteSpace(rawHref))
             {
                 continue;
