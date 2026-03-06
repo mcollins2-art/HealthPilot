@@ -12,6 +12,9 @@ namespace HealthPilot.Api.Endpoints;
 
 public static class IngestionEndpoints
 {
+    private const int DefaultMaxAttempts = 2;
+    private const int MinMaxAttempts = 1;
+
     public static IEndpointRouteBuilder MapIngestionEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapPost("/ingestion/import", HandleImportAsync)
@@ -222,7 +225,7 @@ public static class IngestionEndpoints
         try
         {
             var batchSize = request.BatchSize ?? configuration.GetValue<int?>("Ingestion:BatchSize") ?? 5000;
-            var maxAttempts = Math.Max(configuration.GetValue<int?>("Ingestion:MaxAttempts") ?? 2, 1);
+            var maxAttempts = Math.Max(configuration.GetValue<int?>("Ingestion:MaxAttempts") ?? DefaultMaxAttempts, MinMaxAttempts);
             var parserVersion = extension == ".csv" ? "cms_csv_v1" : "cms_json_v1";
             var hash = await ComputeFileHashAsync(fullPath, cancellationToken);
 
@@ -309,7 +312,7 @@ public static class IngestionEndpoints
             {
                 job.Status = "dead_lettered";
                 job.AttemptCount += 1;
-                job.ErrorMessage = BuildBoundedErrorMessage(ex, httpContext.TraceIdentifier);
+                job.ErrorMessage = IngestionErrorFormatter.BuildBoundedErrorMessage(ex, httpContext.TraceIdentifier);
                 job.UpdatedAtUtc = DateTimeOffset.UtcNow;
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
@@ -454,11 +457,5 @@ public static class IngestionEndpoints
         await using var stream = File.OpenRead(fullPath);
         var hash = await SHA256.HashDataAsync(stream, cancellationToken);
         return Convert.ToHexString(hash).ToLowerInvariant();
-    }
-
-    private static string BuildBoundedErrorMessage(Exception ex, string correlationId)
-    {
-        var message = $"{ex.GetType().Name}: {ex.Message} | correlationId={correlationId}";
-        return message.Length <= 2048 ? message : message[..2048];
     }
 }
