@@ -52,6 +52,41 @@ Request body:
 }
 ```
 
+## Outpatient Surgery Estimate
+### `POST /outpatient-surgery/estimate`
+- Purpose: estimate patient out-of-pocket and insurer payment for outpatient surgery procedures.
+- Auth scope: `outpatient-surgery:read`
+- Rate limiting policy: `api`
+
+Request body:
+```json
+{
+  "zipCode": "10001",
+  "insurer": "Aetna",
+  "cptCode": "47562",
+  "deductibleRemaining": 1200,
+  "coinsurancePercent": 20,
+  "copay": 50,
+  "oopMaxRemaining": 3000,
+  "copayAppliesBeforeDeductible": true
+}
+```
+
+Response body:
+```json
+{
+  "negotiatedRateMin": 1500.0,
+  "negotiatedRateMax": 2400.0,
+  "negotiatedRateRange": "$1500.00 - $2400.00",
+  "estimatedOutOfPocket": 515.0,
+  "cashPriceMin": 1300.0,
+  "cashPriceMax": 2100.0,
+  "cashPriceRange": "$1300.00 - $2100.00",
+  "insurerPaymentEstimate": 1685.0,
+  "roundingMode": "AwayFromZero"
+}
+```
+
 Response body:
 ```json
 {

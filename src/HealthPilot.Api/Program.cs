@@ -29,6 +29,7 @@ builder.Services.AddScoped<IPricingQueryService, PricingQueryService>();
 builder.Services.AddScoped<IPricingSelectionStrategy, NegotiatedMinPricingSelectionStrategy>();
 builder.Services.AddScoped<IBenefitSimulationService, BenefitSimulationService>();
 builder.Services.AddScoped<IEstimateAuditService, EstimateAuditService>();
+builder.Services.AddScoped<IOutpatientSurgeryEstimateService, OutpatientSurgeryEstimateService>();
 builder.Services.AddScoped<IPricingPersistenceService, PricingPersistenceService>();
 builder.Services.AddScoped<IPricingLifecycleService, PricingLifecycleService>();
 builder.Services.AddScoped<PricingIngestionPipeline>();
@@ -72,6 +73,7 @@ if (app.Environment.IsDevelopment())
 // Endpoint definitions are split to keep Program.cs clean and scalable.
 app.MapHealthEndpoints();
 app.MapEstimateEndpoints();
+app.MapOutpatientSurgeryEndpoints();
 app.MapIngestionEndpoints();
 
 app.Run();
