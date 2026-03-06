@@ -9,4 +9,5 @@ public class Procedure
 
     public ICollection<NegotiatedRate> NegotiatedRates { get; set; } = new List<NegotiatedRate>();
     public ICollection<CashPrice> CashPrices { get; set; } = new List<CashPrice>();
+    public ICollection<PolicyProcedureMapping> PolicyProcedureMappings { get; set; } = new List<PolicyProcedureMapping>();
 }

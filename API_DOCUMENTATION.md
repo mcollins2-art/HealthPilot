@@ -11,10 +11,11 @@
 
 ### Scoped key example
 ```json
-"Security": {
+  "Security": {
   "ApiKeyHeader": "X-API-Key",
   "ApiKeys": [
     { "name": "estimate-client", "key": "replace-estimate-key", "scopes": ["estimate:read"] },
+    { "name": "authorization-client", "key": "replace-authorization-key", "scopes": ["authorization:read"] },
     { "name": "ingestion-worker", "key": "replace-ingestion-key", "scopes": ["ingestion:write"] }
   ]
 }
@@ -189,6 +190,35 @@ Async response:
 ### `POST /ingestion/pricing/cleanup?retentionDays=365`
 - Purpose: lifecycle cleanup for stale negotiated/cash pricing rows.
 - Auth scope: `ingestion:write`
+
+## Authorization
+### `POST /authorization-estimate`
+- Purpose: estimate prior-authorization requirement and approval likelihood from insurer policy rules.
+- Auth scope: `authorization:read`
+- Rate limiting policy: `api`
+
+Request body:
+```json
+{
+  "insurer": "Aetna",
+  "procedureCpt": "72141",
+  "diagnosisIcd10": "M54.2",
+  "age": 45
+}
+```
+
+Response body:
+```json
+{
+  "authorizationRequired": true,
+  "approvalProbability": 0.58,
+  "requiredConditions": [
+    "6 weeks conservative therapy",
+    "neurological deficit documentation"
+  ],
+  "commonDenialReason": "No documented conservative treatment"
+}
+```
 
 ## Error model
 - `401`: missing or invalid API key.
