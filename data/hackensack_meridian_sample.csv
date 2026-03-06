@@ -1,0 +1,3 @@
+hospital_name,payer,billing_code,description,negotiated_dollar,standard_charge_discounted_cash,location,source_page
+Hackensack University Medical Center,Commercial Plan B,70450,CT HEAD/BRAIN W/O CONTRAST,1695.00,1325.00,"Hackensack, NJ",https://www.hackensackmeridianhealth.org/en/billing-and-insurance/price-transparency
+Hackensack University Medical Center,Commercial Plan D,73721,MRI LOWER EXTREMITY JOINT W/O CONTRAST,2525.00,2090.00,"Hackensack, NJ",https://www.hackensackmeridianhealth.org/en/billing-and-insurance/price-transparency

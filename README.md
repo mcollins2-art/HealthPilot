@@ -77,6 +77,12 @@ The repository includes C# data pipeline components under `src/HealthPilot.Api/d
 - `normalizer.cs` - CPT normalization and procedure categorization helpers.
 - `loader.cs` - batched loader that creates `providers`, `procedures`, and `rates` tables, handles duplicate upserts, and logs ingestion errors.
 
+Sample hospital transparency data files are committed under `data/`:
+
+- `mount_sinai_sample.csv`
+- `nyu_langone_sample.csv`
+- `hackensack_meridian_sample.csv`
+
 Run focused tests for these components with:
 
 ```powershell
