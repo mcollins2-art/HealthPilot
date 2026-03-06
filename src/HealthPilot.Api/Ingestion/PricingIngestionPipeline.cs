@@ -38,7 +38,8 @@ public class PricingIngestionPipeline(
         string filePath,
         int batchSize,
         bool resumeFromCheckpoint,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? fileHashSha256 = null)
     {
         if (batchSize < 1)
         {
@@ -48,8 +49,8 @@ public class PricingIngestionPipeline(
         var extension = Path.GetExtension(filePath).ToLowerInvariant();
         return extension switch
         {
-            ".csv" => await ImportCsvWithBatchingAsync(filePath, batchSize, resumeFromCheckpoint, cancellationToken),
-            ".json" => await ImportJsonWithBatchingAsync(filePath, batchSize, resumeFromCheckpoint, cancellationToken),
+            ".csv" => await ImportCsvWithBatchingAsync(filePath, batchSize, resumeFromCheckpoint, cancellationToken, fileHashSha256),
+            ".json" => await ImportJsonWithBatchingAsync(filePath, batchSize, resumeFromCheckpoint, cancellationToken, fileHashSha256),
             _ => throw new NotSupportedException($"Unsupported file extension: {extension}")
         };
     }
@@ -58,9 +59,10 @@ public class PricingIngestionPipeline(
         string filePath,
         int batchSize,
         bool resumeFromCheckpoint,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? fileHashSha256)
     {
-        var checkpoint = await checkpointService.GetOrCreateAsync(filePath, batchSize, cancellationToken);
+        var checkpoint = await checkpointService.GetOrCreateAsync(filePath, batchSize, cancellationToken, fileHashSha256);
         var resumeOffset = resumeFromCheckpoint ? checkpoint.RowsProcessed : 0;
 
         if (!resumeFromCheckpoint && checkpoint.RowsProcessed != 0)
@@ -124,9 +126,10 @@ public class PricingIngestionPipeline(
         string filePath,
         int batchSize,
         bool resumeFromCheckpoint,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? fileHashSha256)
     {
-        var checkpoint = await checkpointService.GetOrCreateAsync(filePath, batchSize, cancellationToken);
+        var checkpoint = await checkpointService.GetOrCreateAsync(filePath, batchSize, cancellationToken, fileHashSha256);
         var resumeOffset = resumeFromCheckpoint ? checkpoint.RowsProcessed : 0;
 
         if (!resumeFromCheckpoint && checkpoint.RowsProcessed != 0)

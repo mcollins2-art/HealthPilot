@@ -470,7 +470,7 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
     {
         private readonly Dictionary<string, IngestionCheckpointRecord> _records = new(StringComparer.OrdinalIgnoreCase);
 
-        public Task<IngestionCheckpointRecord> GetOrCreateAsync(string filePath, int batchSize, CancellationToken cancellationToken)
+        public Task<IngestionCheckpointRecord> GetOrCreateAsync(string filePath, int batchSize, CancellationToken cancellationToken, string? fileHashSha256 = null)
         {
             var fullPath = Path.GetFullPath(filePath);
             var existing = _records.Values.FirstOrDefault(x => string.Equals(x.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));

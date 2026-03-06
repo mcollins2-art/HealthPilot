@@ -72,6 +72,31 @@ public class EstimateEndpointsTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("70551")]
+    [InlineData("A123-B4")]
+    [InlineData(" 70551 ")]
+    public async Task Estimate_ReturnsOk_WhenCptCodeFormatValid(string cptCode)
+    {
+        using var factory = new EstimateWebFactory(allowScope: true);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-API-Key", "estimate-key");
+
+        var response = await client.PostAsJsonAsync("/estimate", new EstimateRequest
+        {
+            ZipCode = "10001",
+            Insurer = "Aetna",
+            CptCode = cptCode,
+            DeductibleRemaining = 1200,
+            CoinsurancePercent = 20,
+            Copay = 50,
+            OopMaxRemaining = 3000,
+            CopayAppliesBeforeDeductible = true
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
     [Fact]
     public async Task Estimate_ReturnsForbidden_WhenScopeMissing()
     {

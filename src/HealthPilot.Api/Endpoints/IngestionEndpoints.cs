@@ -303,7 +303,8 @@ public static class IngestionEndpoints
                 fullPath,
                 batchSize,
                 request.ResumeFromCheckpoint,
-                cancellationToken);
+                cancellationToken,
+                hash);
 
             job.Status = "completed";
             job.CheckpointKey = result.CheckpointKey;

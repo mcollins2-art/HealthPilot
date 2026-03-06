@@ -36,7 +36,16 @@ public sealed class IngestionJobQueue(IServiceScopeFactory scopeFactory) : IInge
 
             if (queuedJobId.HasValue)
             {
-                return queuedJobId.Value;
+                var claimedRows = await dbContext.IngestionJobs
+                    .Where(x => x.Id == queuedJobId.Value && x.Status == "queued")
+                    .ExecuteUpdateAsync(updates => updates
+                        .SetProperty(x => x.Status, "in_progress")
+                        .SetProperty(x => x.UpdatedAtUtc, DateTimeOffset.UtcNow), cancellationToken);
+
+                if (claimedRows == 1)
+                {
+                    return queuedJobId.Value;
+                }
             }
 
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);

@@ -67,16 +67,18 @@ public class PricingQueryService(AppDbContext dbContext, ILogger<PricingQuerySer
         var cashQuery = dbContext.CashPrices
             .AsNoTracking()
             .Where(c => c.ProcedureId == procedureId.Value && facilityIds.Contains(c.FacilityId))
-            .Select(c => (decimal?)c.CashPriceAmount);
+            .GroupBy(_ => 1)
+            .Select(group => new
+            {
+                Min = (decimal?)group.Min(x => x.CashPriceAmount),
+                Max = (decimal?)group.Max(x => x.CashPriceAmount),
+                LastUpdated = (DateTimeOffset?)group.Max(x => x.LastUpdated)
+            });
 
-        var cashUpdatedQuery = dbContext.CashPrices
-            .AsNoTracking()
-            .Where(c => c.ProcedureId == procedureId.Value && facilityIds.Contains(c.FacilityId))
-            .Select(c => (DateTimeOffset?)c.LastUpdated);
-
-        var cashMin = await cashQuery.DefaultIfEmpty().MinAsync(cancellationToken);
-        var cashMax = await cashQuery.DefaultIfEmpty().MaxAsync(cancellationToken);
-        var cashLastUpdated = await cashUpdatedQuery.DefaultIfEmpty().MaxAsync(cancellationToken);
+        var cashStats = await cashQuery.FirstOrDefaultAsync(cancellationToken);
+        var cashMin = cashStats?.Min;
+        var cashMax = cashStats?.Max;
+        var cashLastUpdated = cashStats?.LastUpdated;
 
         decimal? negotiatedMin = null;
         decimal? negotiatedMax = null;
@@ -89,18 +91,18 @@ public class PricingQueryService(AppDbContext dbContext, ILogger<PricingQuerySer
                 .Where(r => r.ProcedureId == procedureId.Value
                             && r.InsurerId == insurerId.Value
                             && facilityIds.Contains(r.FacilityId))
-                .Select(r => (decimal?)r.Rate);
+                .GroupBy(_ => 1)
+                .Select(group => new
+                {
+                    Min = (decimal?)group.Min(x => x.Rate),
+                    Max = (decimal?)group.Max(x => x.Rate),
+                    LastUpdated = (DateTimeOffset?)group.Max(x => x.LastUpdated)
+                });
 
-            var negotiatedUpdatedQuery = dbContext.NegotiatedRates
-                .AsNoTracking()
-                .Where(r => r.ProcedureId == procedureId.Value
-                            && r.InsurerId == insurerId.Value
-                            && facilityIds.Contains(r.FacilityId))
-                .Select(r => (DateTimeOffset?)r.LastUpdated);
-
-            negotiatedMin = await negotiatedQuery.DefaultIfEmpty().MinAsync(cancellationToken);
-            negotiatedMax = await negotiatedQuery.DefaultIfEmpty().MaxAsync(cancellationToken);
-            negotiatedLastUpdated = await negotiatedUpdatedQuery.DefaultIfEmpty().MaxAsync(cancellationToken);
+            var negotiatedStats = await negotiatedQuery.FirstOrDefaultAsync(cancellationToken);
+            negotiatedMin = negotiatedStats?.Min;
+            negotiatedMax = negotiatedStats?.Max;
+            negotiatedLastUpdated = negotiatedStats?.LastUpdated;
         }
 
         var pricingLastUpdated = MaxDate(negotiatedLastUpdated, cashLastUpdated);

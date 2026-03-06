@@ -107,7 +107,8 @@ public sealed class IngestionJobWorker(
                 job.FilePath,
                 job.BatchSize,
                 job.ResumeFromCheckpoint,
-                cancellationToken);
+                cancellationToken,
+                job.FileHashSha256);
 
             job.Status = "completed";
             job.CheckpointKey = result.CheckpointKey;
