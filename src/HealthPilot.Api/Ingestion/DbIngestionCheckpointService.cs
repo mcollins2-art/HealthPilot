@@ -22,7 +22,7 @@ public class DbIngestionCheckpointService(
     public async Task<IngestionCheckpointRecord> GetOrCreateAsync(string filePath, int batchSize, CancellationToken cancellationToken)
     {
         var normalizedPath = Path.GetFullPath(filePath);
-        var key = ComputeCheckpointKey(normalizedPath, batchSize);
+        var key = await ComputeCheckpointKeyAsync(normalizedPath, batchSize, cancellationToken);
         var existing = await dbContext.IngestionCheckpoints.SingleOrDefaultAsync(x => x.CheckpointKey == key, cancellationToken);
         if (existing is not null)
         {
@@ -124,9 +124,20 @@ public class DbIngestionCheckpointService(
         };
     }
 
-    private static string ComputeCheckpointKey(string normalizedFilePath, int batchSize)
+    private static async Task<string> ComputeCheckpointKeyAsync(string normalizedFilePath, int batchSize, CancellationToken cancellationToken)
     {
-        var content = $"{normalizedFilePath}|{batchSize}";
+        string content;
+        if (File.Exists(normalizedFilePath))
+        {
+            await using var stream = File.OpenRead(normalizedFilePath);
+            var fileHash = await SHA256.HashDataAsync(stream, cancellationToken);
+            content = $"{Convert.ToHexString(fileHash)}|{batchSize}";
+        }
+        else
+        {
+            content = $"{normalizedFilePath}|{batchSize}";
+        }
+
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(content));
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }

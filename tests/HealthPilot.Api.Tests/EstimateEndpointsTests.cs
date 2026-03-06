@@ -45,8 +45,31 @@ public class EstimateEndpointsTests
         Assert.Equal(80m, payload.GetProperty("cashPriceMin").GetDecimal());
         Assert.Equal(160m, payload.GetProperty("cashPriceMax").GetDecimal());
         Assert.Equal("$80.00 - $160.00", payload.GetProperty("cashPriceRange").GetString());
+        Assert.Equal("2026-01-01T00:00:00+00:00", payload.GetProperty("pricingLastUpdatedAt").GetString());
         Assert.Equal(57.50m, payload.GetProperty("insurerPaymentEstimate").GetDecimal());
         Assert.Equal("AwayFromZero", payload.GetProperty("roundingMode").GetString());
+    }
+
+    [Fact]
+    public async Task Estimate_ReturnsBadRequest_WhenCptCodeFormatInvalid()
+    {
+        using var factory = new EstimateWebFactory(allowScope: true);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-API-Key", "estimate-key");
+
+        var response = await client.PostAsJsonAsync("/estimate", new EstimateRequest
+        {
+            ZipCode = "10001",
+            Insurer = "Aetna",
+            CptCode = "BAD-CODE-TOO-LONG",
+            DeductibleRemaining = 1200,
+            CoinsurancePercent = 20,
+            Copay = 50,
+            OopMaxRemaining = 3000,
+            CopayAppliesBeforeDeductible = true
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -109,7 +132,7 @@ public class EstimateEndpointsTests
     {
         public Task<PricingSummary> GetPricingSummaryAsync(string zipCode, string insurer, string cptCode, CancellationToken cancellationToken)
         {
-            return Task.FromResult(new PricingSummary(100m, 200m, 80m, 160m));
+            return Task.FromResult(new PricingSummary(100m, 200m, 80m, 160m, DateTimeOffset.Parse("2026-01-01T00:00:00Z")));
         }
 
         public string FormatRange(decimal? minValue, decimal? maxValue)

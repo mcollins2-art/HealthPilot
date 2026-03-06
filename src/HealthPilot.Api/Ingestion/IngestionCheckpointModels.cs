@@ -18,5 +18,13 @@ public class IngestionBatchImportResult
     public string CheckpointKey { get; set; } = string.Empty;
     public int RowsResumedFrom { get; set; }
     public int RowsProcessed { get; set; }
+    public List<IngestionRowParseError> ParseErrors { get; set; } = [];
     public bool Completed { get; set; }
+}
+
+public class IngestionRowParseError
+{
+    public int? CsvRowNumber { get; set; }
+    public string? JsonPath { get; set; }
+    public string Message { get; set; } = string.Empty;
 }

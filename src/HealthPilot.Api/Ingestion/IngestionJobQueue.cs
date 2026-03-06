@@ -1,18 +1,47 @@
-using System.Threading.Channels;
+using HealthPilot.Api.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace HealthPilot.Api.Ingestion;
 
-public sealed class IngestionJobQueue : IIngestionJobQueue
+public sealed class IngestionJobQueue(IServiceScopeFactory scopeFactory) : IIngestionJobQueue
 {
-    private readonly Channel<long> _channel = Channel.CreateUnbounded<long>();
-
-    public ValueTask EnqueueAsync(long jobId, CancellationToken cancellationToken)
+    public async ValueTask EnqueueAsync(long jobId, CancellationToken cancellationToken)
     {
-        return _channel.Writer.WriteAsync(jobId, cancellationToken);
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var job = await dbContext.IngestionJobs.SingleOrDefaultAsync(x => x.Id == jobId, cancellationToken);
+        if (job is null)
+        {
+            return;
+        }
+
+        job.Status = "queued";
+        job.UpdatedAtUtc = DateTimeOffset.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public ValueTask<long> DequeueAsync(CancellationToken cancellationToken)
+    public async ValueTask<long> DequeueAsync(CancellationToken cancellationToken)
     {
-        return _channel.Reader.ReadAsync(cancellationToken);
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var queuedJobId = await dbContext.IngestionJobs
+                .AsNoTracking()
+                .Where(x => x.Status == "queued")
+                .OrderBy(x => x.CreatedAtUtc)
+                .Select(x => (long?)x.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (queuedJobId.HasValue)
+            {
+                return queuedJobId.Value;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+        }
+
+        throw new OperationCanceledException(cancellationToken);
     }
 }

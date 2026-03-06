@@ -81,6 +81,33 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Import_ReturnsBadRequest_WhenPathTraversalEscapesAllowedRoot()
+    {
+        var allowedRoot = Path.Combine(_tempDirectory, "allowed-traversal");
+        Directory.CreateDirectory(allowedRoot);
+        var traversalPath = Path.Combine(allowedRoot, "..", "..", "etc", "passwd");
+
+        using var scopedFactory = CreateFactory(new Dictionary<string, string?>
+        {
+            ["Ingestion:AllowedRootPath"] = allowedRoot
+        });
+        using var scopedClient = scopedFactory.CreateClient();
+        scopedClient.DefaultRequestHeaders.Add("X-API-Key", "ingestion-key");
+
+        var response = await scopedClient.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
+        {
+            FilePath = traversalPath,
+            BatchSize = 100,
+            ResumeFromCheckpoint = false
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("Invalid file path", problem!.Title);
+    }
+
+    [Fact]
     public async Task Import_ReturnsOk_WhenInsideAllowedRoot()
     {
         var allowedRoot = Path.Combine(_tempDirectory, "allowed-ok");
@@ -215,6 +242,60 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
         Assert.Equal("queued", payload.GetProperty("status").GetString());
         Assert.True(payload.GetProperty("jobId").GetInt64() > 0);
         Assert.Equal("cms_csv_v1", payload.GetProperty("parserVersion").GetString());
+    }
+
+    [Fact]
+    public async Task Import_ReturnsConflict_WhenFileHashAlreadyImported()
+    {
+        var csv = Path.Combine(_tempDirectory, "dedupe.csv");
+        await File.WriteAllTextAsync(csv,
+            "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price\n" +
+            "70551,Brain MRI,imaging,Test Hospital,hospital,Hoboken,NJ,07030,Plan A,1200,contracted,950");
+
+        var firstResponse = await _client.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
+        {
+            FilePath = csv,
+            BatchSize = 100,
+            ResumeFromCheckpoint = false,
+            IdempotencyKey = "dedupe-key-1"
+        });
+
+        firstResponse.EnsureSuccessStatusCode();
+
+        var secondResponse = await _client.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
+        {
+            FilePath = csv,
+            BatchSize = 100,
+            ResumeFromCheckpoint = false,
+            IdempotencyKey = "dedupe-key-2"
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, secondResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Import_ReturnsParserErrorsWithRowDetails_WhenRowsContainInvalidCpt()
+    {
+        var csv = Path.Combine(_tempDirectory, "parse-errors.csv");
+        await File.WriteAllTextAsync(csv,
+            "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price\n" +
+            "BAD,Invalid CPT,imaging,Test Hospital,hospital,Hoboken,NJ,07030,Plan A,1200,contracted,950\n" +
+            "70551,Brain MRI,imaging,Test Hospital,hospital,Hoboken,NJ,07030,Plan A,1200,contracted,950");
+
+        var response = await _client.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
+        {
+            FilePath = csv,
+            BatchSize = 100,
+            ResumeFromCheckpoint = false
+        });
+
+        response.EnsureSuccessStatusCode();
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(1, payload.GetProperty("recordsSkipped").GetInt32());
+        var parserErrors = payload.GetProperty("parserErrors");
+        Assert.Equal(1, parserErrors.GetArrayLength());
+        var firstError = parserErrors.EnumerateArray().First();
+        Assert.Equal(2, firstError.GetProperty("csvRowNumber").GetInt32());
     }
 
     [Fact]

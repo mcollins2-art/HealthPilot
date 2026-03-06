@@ -18,6 +18,7 @@ public class IngestionJob
     public string? ErrorMessage { get; set; }
     public long? ReplayOfJobId { get; set; }
     public string? SourceSystem { get; set; }
+    public string? IdempotencyKey { get; set; }
     public string? FileHashSha256 { get; set; }
     public string ParserVersion { get; set; } = "cms_v1";
     public DateTimeOffset? EffectiveStartUtc { get; set; }

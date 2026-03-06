@@ -31,4 +31,16 @@ public class NormalizersTests
 
         Assert.Equal(expected, normalized);
     }
+
+    [Theory]
+    [InlineData("70553", true)]
+    [InlineData("A1234", true)]
+    [InlineData("A123-B4", true)]
+    [InlineData("A1234B", false)]
+    [InlineData("1234-AB", true)]
+    [InlineData("ABC", false)]
+    public void IsValidCptOrHcpcs_ReturnsExpectedResult(string value, bool expected)
+    {
+        Assert.Equal(expected, Normalizers.IsValidCptOrHcpcs(value));
+    }
 }

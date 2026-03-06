@@ -143,6 +143,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(x => x.CheckpointKey).HasMaxLength(64);
             entity.Property(x => x.ErrorMessage).HasMaxLength(2048);
             entity.Property(x => x.SourceSystem).HasMaxLength(100);
+            entity.Property(x => x.IdempotencyKey).HasMaxLength(128);
             entity.Property(x => x.FileHashSha256).HasMaxLength(64);
             entity.Property(x => x.ParserVersion).HasMaxLength(50).IsRequired();
             entity.Property(x => x.TenantId).HasMaxLength(100);
@@ -151,6 +152,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(x => x.Status);
             entity.HasIndex(x => x.CreatedAtUtc);
             entity.HasIndex(x => x.ReplayOfJobId);
+            entity.HasIndex(x => x.IdempotencyKey);
             entity.HasIndex(x => x.FileHashSha256);
         });
     }
