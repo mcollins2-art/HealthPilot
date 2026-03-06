@@ -182,6 +182,54 @@ public class ApiKeyAuthenticationMiddlewareTests
     }
 
     [Fact]
+    public async Task InvokeAsync_ReturnsForbidden_WhenLegacyApiKeyRequestsIngestionScopeByDefault()
+    {
+        var middleware = CreateMiddleware(
+            new Dictionary<string, string?>
+            {
+                ["Security:ApiKey"] = "legacy-key"
+            },
+            isDevelopment: false,
+            out _);
+
+        var context = CreateContext("/ingestion/import");
+        context.Request.Headers["X-API-Key"] = "legacy-key";
+        context.SetEndpoint(new Endpoint(
+            _ => Task.CompletedTask,
+            new EndpointMetadataCollection(new ApiKeyScopeRequirement("ingestion:write")),
+            "legacy-ingestion-scope-test"));
+
+        await middleware.InvokeAsync(context);
+
+        Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_AllowsLegacyApiKey_WhenLegacyScopesConfigured()
+    {
+        var middleware = CreateMiddleware(
+            new Dictionary<string, string?>
+            {
+                ["Security:ApiKey"] = "legacy-key",
+                ["Security:LegacyKeyScopes:0"] = "estimate:read",
+                ["Security:LegacyKeyScopes:1"] = "ingestion:write"
+            },
+            isDevelopment: false,
+            out var nextCalled);
+
+        var context = CreateContext("/ingestion/import");
+        context.Request.Headers["X-API-Key"] = "legacy-key";
+        context.SetEndpoint(new Endpoint(
+            _ => Task.CompletedTask,
+            new EndpointMetadataCollection(new ApiKeyScopeRequirement("ingestion:write")),
+            "legacy-ingestion-scope-configured-test"));
+
+        await middleware.InvokeAsync(context);
+
+        Assert.True(nextCalled());
+    }
+
+    [Fact]
     public async Task InvokeAsync_AllowsRequest_WhenValidKeyAndNoScopeRequirement()
     {
         var middleware = CreateMiddleware(

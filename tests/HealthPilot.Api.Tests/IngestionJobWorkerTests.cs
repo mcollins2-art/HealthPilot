@@ -184,21 +184,34 @@ public class IngestionJobWorkerTests : IDisposable
     private sealed class RecordingQueue : IIngestionJobQueue
     {
         private readonly Channel<long> _channel = Channel.CreateUnbounded<long>();
+        private long _pendingCount;
         public List<long> EnqueuedJobIds { get; } = [];
+        public long PendingCount => Interlocked.Read(ref _pendingCount);
 
-        public ValueTask EnqueueAsync(long jobId, CancellationToken cancellationToken)
+        public async ValueTask EnqueueAsync(long jobId, CancellationToken cancellationToken)
         {
             lock (EnqueuedJobIds)
             {
                 EnqueuedJobIds.Add(jobId);
             }
 
-            return _channel.Writer.WriteAsync(jobId, cancellationToken);
+            Interlocked.Increment(ref _pendingCount);
+            try
+            {
+                await _channel.Writer.WriteAsync(jobId, cancellationToken);
+            }
+            catch
+            {
+                Interlocked.Decrement(ref _pendingCount);
+                throw;
+            }
         }
 
-        public ValueTask<long> DequeueAsync(CancellationToken cancellationToken)
+        public async ValueTask<long> DequeueAsync(CancellationToken cancellationToken)
         {
-            return _channel.Reader.ReadAsync(cancellationToken);
+            var jobId = await _channel.Reader.ReadAsync(cancellationToken);
+            Interlocked.Decrement(ref _pendingCount);
+            return jobId;
         }
     }
 

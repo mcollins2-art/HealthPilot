@@ -9,9 +9,15 @@ public class ApiKeyAuthenticationMiddleware(
     IHostEnvironment environment,
     ILogger<ApiKeyAuthenticationMiddleware> logger)
 {
+    private static readonly string[] DefaultLegacyScopes = ["estimate:read"];
     private readonly string? _configuredApiKey = configuration["Security:ApiKey"];
     private readonly string _headerName = configuration["Security:ApiKeyHeader"] ?? "X-API-Key";
     private readonly string _tenantHeaderName = configuration["Security:TenantHeader"] ?? "X-Tenant-Id";
+    private readonly List<string> _legacyKeyScopes = (
+        configuration.GetSection("Security:LegacyKeyScopes").Get<List<string>>() ?? DefaultLegacyScopes.ToList())
+        .Where(scope => !string.IsNullOrWhiteSpace(scope))
+        .DefaultIfEmpty(DefaultLegacyScopes[0])
+        .ToList();
     private readonly List<ApiKeyConfig> _configuredApiKeys = configuration
         .GetSection("Security:ApiKeys")
         .Get<List<ApiKeyConfig>>() ?? [];
@@ -108,7 +114,7 @@ public class ApiKeyAuthenticationMiddleware(
             {
                 Name = "legacy",
                 Key = _configuredApiKey,
-                Scopes = ["estimate:read", "ingestion:write"]
+                Scopes = _legacyKeyScopes
             };
         }
 

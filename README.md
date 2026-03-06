@@ -26,6 +26,7 @@ dotnet run --project .\src\HealthPilot.Api\HealthPilot.Api.csproj --urls "http:/
 - API key header: `X-API-Key` (configurable via `Security:ApiKeyHeader`).
 - Non-development startup requires either `Security:ApiKey` or `Security:ApiKeys`.
 - Scoped API keys are supported via `Security:ApiKeys`.
+- Legacy `Security:ApiKey` defaults to `estimate:read` only. To grant additional scopes during migration, set `Security:LegacyKeyScopes`.
 - Endpoint scopes:
   - `/estimate` requires `estimate:read`
   - `/ingestion/import` requires `ingestion:write`
@@ -36,6 +37,7 @@ Example scoped key config:
 ```json
 "Security": {
   "ApiKeyHeader": "X-API-Key",
+  "LegacyKeyScopes": ["estimate:read"],
   "ApiKeys": [
     { "name": "estimate-client", "key": "replace-estimate-key", "scopes": ["estimate:read"] },
     { "name": "ingestion-worker", "key": "replace-ingestion-key", "scopes": ["ingestion:write"] }

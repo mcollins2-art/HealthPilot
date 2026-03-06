@@ -80,6 +80,10 @@ Required scopes:
 - `/estimate`: `estimate:read`
 - `/ingestion/import`: `ingestion:write`
 
+Note:
+- Legacy single-key mode (`Security:ApiKey`) is read-only by default (`estimate:read`).
+- To temporarily grant broader access while migrating to scoped keys, configure `Security:LegacyKeyScopes`.
+
 ### 4.4 Async jobs appear stuck in `queued`
 Cause: service restarted while jobs were queued in DB.
 
@@ -121,6 +125,7 @@ cd backend
 ## 6) Security checklist (pilot)
 - `Security:ApiKey` OR `Security:ApiKeys` configured in non-development.
 - Distinct scoped keys per client/integration.
+- Legacy single-key mode only used for migration and explicitly scoped via `Security:LegacyKeyScopes` when needed.
 - No production secrets committed to source control.
 - `Ingestion:AllowedRootPath` configured where ingestion endpoint is enabled.
 - Swagger/OpenAPI auth bypass only allowed in development environment.
