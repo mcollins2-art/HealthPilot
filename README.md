@@ -57,6 +57,28 @@ Example scoped key config:
 - Imports use streaming batch persistence (`Ingestion:BatchSize`, default `5000`) for both CSV and JSON files to reduce peak memory pressure.
 - Checkpoint/resume is supported for batched imports with durable DB-backed checkpoints; use `resumeFromCheckpoint` in request payload.
 
+## Data Pipeline Components (C#)
+
+The repository includes C# data pipeline components under `src/HealthPilot.Api/data_pipeline/`:
+
+- `downloader.cs` - resilient HTTP downloader with streaming writes, progress logging, and retry handling.
+- `parser.cs` - streaming CSV/JSON parser that extracts:
+  - `hospital_name`
+  - `payer`
+  - `procedure_code` (CPT)
+  - `procedure_description`
+  - `negotiated_rate`
+  - `cash_price`
+  - `location`
+- `normalizer.cs` - CPT normalization and procedure categorization helpers.
+- `loader.cs` - batched loader that creates `providers`, `procedures`, and `rates` tables, handles duplicate upserts, and logs ingestion errors.
+
+Run focused tests for these components with:
+
+```powershell
+dotnet test tests/HealthPilot.Api.Tests/HealthPilot.Api.Tests.csproj --filter "DataPipelineComponentsTests"
+```
+
 ## Load Testing
 
 - Perf smoke script: `scripts/loadtest/Run-EstimatePerfSmoke.ps1`.
