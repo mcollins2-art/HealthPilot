@@ -10,8 +10,11 @@ public class PolicyRuleExtractor : IPolicyRuleExtractor
 
         if (lowerText.Contains("medically necessary") || lowerText.Contains("prior authorization"))
         {
-            foreach (var cptCode in procedureCptCodes.DefaultIfEmpty(string.Empty))
+            var cptCodes = procedureCptCodes.Count > 0 ? procedureCptCodes : [string.Empty];
+            foreach (var cptCode in cptCodes)
             {
+                var ruleCptCode = string.IsNullOrWhiteSpace(cptCode) ? null : cptCode;
+
                 if (lowerText.Contains("conservative therapy") && lowerText.Contains("six weeks"))
                 {
                     rules.Add(new ExtractedPolicyRule(
@@ -19,7 +22,7 @@ public class PolicyRuleExtractor : IPolicyRuleExtractor
                         "Conservative therapy is required before authorization.",
                         true,
                         100,
-                        string.IsNullOrWhiteSpace(cptCode) ? null : cptCode,
+                        ruleCptCode,
                         "6 weeks conservative therapy",
                         "No documented conservative treatment"));
                 }
@@ -31,7 +34,7 @@ public class PolicyRuleExtractor : IPolicyRuleExtractor
                         "Neurological deficit documentation is required.",
                         true,
                         110,
-                        string.IsNullOrWhiteSpace(cptCode) ? null : cptCode,
+                        ruleCptCode,
                         "neurological deficit documentation",
                         "No neurological deficit documentation"));
                 }

@@ -25,7 +25,7 @@ public class AuthorizationProbabilityModelTests
     }
 
     [Fact]
-    public void Estimate_ClampsLowerBound()
+    public void Estimate_AppliesStrictInsurerPenalty()
     {
         var model = new AuthorizationProbabilityModel();
         var input = new AuthorizationProbabilityInput(
