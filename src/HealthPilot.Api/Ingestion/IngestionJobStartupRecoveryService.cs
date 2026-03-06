@@ -24,7 +24,9 @@ public sealed class IngestionJobStartupRecoveryService(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Skipping queued ingestion job recovery at startup.");
+            logger.LogWarning(
+                ex,
+                "Failed to query database for queued ingestion jobs. Skipping startup recovery; jobs will recover on next successful startup.");
             return;
         }
 

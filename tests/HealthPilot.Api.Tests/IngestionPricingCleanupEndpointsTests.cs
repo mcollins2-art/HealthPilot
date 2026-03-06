@@ -91,8 +91,7 @@ public class IngestionPricingCleanupEndpointsTests : IDisposable
                 {
                     ["Security:ApiKeys:0:Name"] = "ingestion-client",
                     ["Security:ApiKeys:0:Key"] = "ingestion-key",
-                    ["Security:ApiKeys:0:Scopes:0"] = "ingestion:write",
-                    ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Port=5432;Database=healthpilot;Username=postgres;******"
+                    ["Security:ApiKeys:0:Scopes:0"] = "ingestion:write"
                 });
             });
 

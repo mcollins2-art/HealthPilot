@@ -209,7 +209,7 @@ public class IngestionJobWorkerTests : IDisposable
             IReadOnlyList<StructuredPricingRecord> records,
             CancellationToken cancellationToken)
         {
-            var current = Interlocked.CompareExchange(ref _remainingFailures, 0, 0);
+            var current = Volatile.Read(ref _remainingFailures);
             if (current > 0)
             {
                 Interlocked.Decrement(ref _remainingFailures);
