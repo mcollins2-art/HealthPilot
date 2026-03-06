@@ -81,6 +81,37 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Import_ReturnsBadRequest_WhenPathSharesPrefixButIsOutsideAllowedRoot()
+    {
+        var allowedRoot = Path.Combine(_tempDirectory, "allowed");
+        var siblingWithSharedPrefix = Path.Combine(_tempDirectory, "allowed-sibling");
+        Directory.CreateDirectory(allowedRoot);
+        Directory.CreateDirectory(siblingWithSharedPrefix);
+
+        var outsideFile = Path.Combine(siblingWithSharedPrefix, "outside.csv");
+        await File.WriteAllTextAsync(outsideFile, "cpt_code,description\n70551,Brain MRI");
+
+        using var scopedFactory = CreateFactory(new Dictionary<string, string?>
+        {
+            ["Ingestion:AllowedRootPath"] = allowedRoot
+        });
+        using var scopedClient = scopedFactory.CreateClient();
+        scopedClient.DefaultRequestHeaders.Add("X-API-Key", "ingestion-key");
+
+        var response = await scopedClient.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
+        {
+            FilePath = outsideFile,
+            BatchSize = 100,
+            ResumeFromCheckpoint = false
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("Invalid file path", problem!.Title);
+    }
+
+    [Fact]
     public async Task Import_ReturnsOk_WhenInsideAllowedRoot()
     {
         var allowedRoot = Path.Combine(_tempDirectory, "allowed-ok");
@@ -322,6 +353,7 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
             {
                 var settings = new Dictionary<string, string?>
                 {
+                    ["Ingestion:AllowedRootPath"] = tempDirectory,
                     ["Ingestion:CheckpointDirectory"] = Path.Combine(tempDirectory, "checkpoints"),
                     ["Ingestion:CheckpointRetentionHours"] = "168",
                     ["Ingestion:BatchSize"] = "5000",

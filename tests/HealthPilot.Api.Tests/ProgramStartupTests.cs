@@ -25,10 +25,13 @@ public class ProgramStartupTests
     [Fact]
     public void Production_Starts_WhenLegacyApiKeyConfigured()
     {
+        var allowedRoot = CreateTempDirectory();
         var previous = Environment.GetEnvironmentVariable("Security__ApiKey");
+        var previousAllowedRoot = Environment.GetEnvironmentVariable("Ingestion__AllowedRootPath");
         try
         {
             Environment.SetEnvironmentVariable("Security__ApiKey", "legacy-key");
+            Environment.SetEnvironmentVariable("Ingestion__AllowedRootPath", allowedRoot);
 
             using var factory = new StartupWebFactory(
                 environmentName: Environments.Production,
@@ -40,18 +43,23 @@ public class ProgramStartupTests
         finally
         {
             Environment.SetEnvironmentVariable("Security__ApiKey", previous);
+            Environment.SetEnvironmentVariable("Ingestion__AllowedRootPath", previousAllowedRoot);
+            Directory.Delete(allowedRoot, recursive: true);
         }
     }
 
     [Fact]
     public void Production_Starts_WhenScopedApiKeyConfigured()
     {
+        var allowedRoot = CreateTempDirectory();
         var previousKey = Environment.GetEnvironmentVariable("Security__ApiKeys__0__Key");
         var previousName = Environment.GetEnvironmentVariable("Security__ApiKeys__0__Name");
+        var previousAllowedRoot = Environment.GetEnvironmentVariable("Ingestion__AllowedRootPath");
         try
         {
             Environment.SetEnvironmentVariable("Security__ApiKeys__0__Name", "startup-test");
             Environment.SetEnvironmentVariable("Security__ApiKeys__0__Key", "scoped-key");
+            Environment.SetEnvironmentVariable("Ingestion__AllowedRootPath", allowedRoot);
 
             using var factory = new StartupWebFactory(
                 environmentName: Environments.Production,
@@ -64,7 +72,65 @@ public class ProgramStartupTests
         {
             Environment.SetEnvironmentVariable("Security__ApiKeys__0__Name", previousName);
             Environment.SetEnvironmentVariable("Security__ApiKeys__0__Key", previousKey);
+            Environment.SetEnvironmentVariable("Ingestion__AllowedRootPath", previousAllowedRoot);
+            Directory.Delete(allowedRoot, recursive: true);
         }
+    }
+
+    [Fact]
+    public void Production_Throws_WhenAllowedRootMissing()
+    {
+        var previous = Environment.GetEnvironmentVariable("Security__ApiKey");
+        var previousAllowedRoot = Environment.GetEnvironmentVariable("Ingestion__AllowedRootPath");
+        try
+        {
+            Environment.SetEnvironmentVariable("Security__ApiKey", "legacy-key");
+            Environment.SetEnvironmentVariable("Ingestion__AllowedRootPath", "");
+
+            using var factory = new StartupWebFactory(
+                environmentName: Environments.Production,
+                extraConfig: new Dictionary<string, string?>());
+
+            var ex = Assert.Throws<InvalidOperationException>(() => factory.CreateClient());
+            Assert.Contains("Ingestion:AllowedRootPath must be configured", ex.Message);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("Security__ApiKey", previous);
+            Environment.SetEnvironmentVariable("Ingestion__AllowedRootPath", previousAllowedRoot);
+        }
+    }
+
+    [Fact]
+    public void Production_Throws_WhenAllowedRootDoesNotExist()
+    {
+        var previous = Environment.GetEnvironmentVariable("Security__ApiKey");
+        var previousAllowedRoot = Environment.GetEnvironmentVariable("Ingestion__AllowedRootPath");
+        try
+        {
+            Environment.SetEnvironmentVariable("Security__ApiKey", "legacy-key");
+
+            var missingPath = Path.Combine(Path.GetTempPath(), "healthpilot-missing-ingestion-root", Guid.NewGuid().ToString("N"));
+            Environment.SetEnvironmentVariable("Ingestion__AllowedRootPath", missingPath);
+            using var factory = new StartupWebFactory(
+                environmentName: Environments.Production,
+                extraConfig: new Dictionary<string, string?>());
+
+            var ex = Assert.Throws<InvalidOperationException>(() => factory.CreateClient());
+            Assert.Contains("must point to an existing directory", ex.Message);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("Security__ApiKey", previous);
+            Environment.SetEnvironmentVariable("Ingestion__AllowedRootPath", previousAllowedRoot);
+        }
+    }
+
+    private static string CreateTempDirectory()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "healthpilot-startup-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(path);
+        return path;
     }
 
     private sealed class StartupWebFactory(string environmentName, Dictionary<string, string?> extraConfig) : WebApplicationFactory<Program>

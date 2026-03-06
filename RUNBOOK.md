@@ -99,5 +99,5 @@ cd backend
 - `Security:ApiKey` OR `Security:ApiKeys` configured in non-development.
 - Distinct scoped keys per client/integration.
 - No production secrets committed to source control.
-- `Ingestion:AllowedRootPath` configured where ingestion endpoint is enabled.
+- `Ingestion:AllowedRootPath` configured in non-development and points to an existing directory.
 - Swagger/OpenAPI auth bypass only allowed in development environment.

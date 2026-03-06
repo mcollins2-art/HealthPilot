@@ -45,6 +45,18 @@ public class HealthEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task Health_IncludesSecurityHeaders()
+    {
+        var response = await _client.GetAsync("/health");
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Equal("DENY", response.Headers.GetValues("X-Frame-Options").Single());
+        Assert.Equal("no-referrer", response.Headers.GetValues("Referrer-Policy").Single());
+        Assert.Equal("none", response.Headers.GetValues("X-Permitted-Cross-Domain-Policies").Single());
+    }
+
+    [Fact]
     public async Task Readiness_ReturnsServiceUnavailable_WhenPendingMigrationsExist()
     {
         var response = await _client.GetAsync("/health/ready");

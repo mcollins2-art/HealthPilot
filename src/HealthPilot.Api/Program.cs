@@ -11,12 +11,29 @@ var builder = WebApplication.CreateBuilder(args);
 
 var hasLegacyApiKey = !string.IsNullOrWhiteSpace(builder.Configuration["Security:ApiKey"]);
 var hasScopedApiKeys = builder.Configuration.GetSection("Security:ApiKeys").GetChildren().Any();
+var ingestionAllowedRootPath = builder.Configuration["Ingestion:AllowedRootPath"];
 
 if (!builder.Environment.IsDevelopment()
     && !hasLegacyApiKey
     && !hasScopedApiKeys)
 {
     throw new InvalidOperationException("Security:ApiKey or Security:ApiKeys must be configured in non-development environments.");
+}
+
+if (!builder.Environment.IsDevelopment()
+    && string.IsNullOrWhiteSpace(ingestionAllowedRootPath))
+{
+    throw new InvalidOperationException("Ingestion:AllowedRootPath must be configured in non-development environments.");
+}
+
+if (!builder.Environment.IsDevelopment()
+    && !string.IsNullOrWhiteSpace(ingestionAllowedRootPath))
+{
+    var normalizedAllowedRootPath = Path.GetFullPath(ingestionAllowedRootPath);
+    if (!Directory.Exists(normalizedAllowedRootPath))
+    {
+        throw new InvalidOperationException("Ingestion:AllowedRootPath must point to an existing directory.");
+    }
 }
 
 // Register the PostgreSQL EF Core DbContext. This is the main persistence
@@ -57,6 +74,15 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.TryAdd("X-Content-Type-Options", "nosniff");
+    context.Response.Headers.TryAdd("X-Frame-Options", "DENY");
+    context.Response.Headers.TryAdd("Referrer-Policy", "no-referrer");
+    context.Response.Headers.TryAdd("X-Permitted-Cross-Domain-Policies", "none");
+    await next();
+});
 
 app.UseMiddleware<UnhandledExceptionMiddleware>();
 app.UseMiddleware<RequestLoggingMiddleware>();

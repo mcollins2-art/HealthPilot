@@ -26,10 +26,12 @@ dotnet run --project .\src\HealthPilot.Api\HealthPilot.Api.csproj --urls "http:/
 - API key header: `X-API-Key` (configurable via `Security:ApiKeyHeader`).
 - Non-development startup requires either `Security:ApiKey` or `Security:ApiKeys`.
 - Scoped API keys are supported via `Security:ApiKeys`.
+- Non-development startup also requires `Ingestion:AllowedRootPath` to point to an existing directory.
 - Endpoint scopes:
   - `/estimate` requires `estimate:read`
   - `/ingestion/import` requires `ingestion:write`
 - Rate limiting is enabled and config-driven via `RateLimiting`.
+- API responses include baseline hardening headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`).
 
 Example scoped key config:
 
