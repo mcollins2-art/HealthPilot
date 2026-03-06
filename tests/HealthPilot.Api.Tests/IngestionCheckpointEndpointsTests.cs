@@ -95,7 +95,8 @@ public class IngestionCheckpointEndpointsTests : IAsyncLifetime
     public async Task ListCheckpoints_DoesNotDeleteExpiredRecords_AsSideEffect()
     {
         var oldKey = await CreateCheckpointAsync("C:\\data\\list-sideeffect-old.json", 1000, 5, completed: true);
-        await SetCheckpointUpdatedAtAsync(oldKey, DateTimeOffset.UtcNow.AddDays(-8));
+        var configuredRetention = TimeSpan.FromHours(168);
+        await SetCheckpointUpdatedAtAsync(oldKey, DateTimeOffset.UtcNow - configuredRetention - TimeSpan.FromHours(1));
 
         var response = await _client.GetAsync("/ingestion/checkpoints?limit=10");
 
