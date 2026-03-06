@@ -1,0 +1,34 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=healthpilot;Username=postgres;Password=postgres
+      Security__ApiKeyHeader: X-API-Key
+      Security__ApiKeys__0__Name: estimate-client
+      Security__ApiKeys__0__Key: replace-estimate-key
+      Security__ApiKeys__0__Scopes__0: estimate:read
+      Security__ApiKeys__1__Name: ingestion-worker
+      Security__ApiKeys__1__Key: replace-ingestion-key
+      Security__ApiKeys__1__Scopes__0: ingestion:write
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: healthpilot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

@@ -45,8 +45,34 @@ public class EstimateEndpointsTests
         Assert.Equal(80m, payload.GetProperty("cashPriceMin").GetDecimal());
         Assert.Equal(160m, payload.GetProperty("cashPriceMax").GetDecimal());
         Assert.Equal("$80.00 - $160.00", payload.GetProperty("cashPriceRange").GetString());
+        Assert.Equal("$100.00 - $200.00", payload.GetProperty("expectedCostRange").GetString());
+        Assert.Equal(0.92m, payload.GetProperty("confidenceScore").GetDecimal());
+        Assert.Equal("Hospital A", payload.GetProperty("cheapestNearbyProvider").GetProperty("providerName").GetString());
+        Assert.Equal(100m, payload.GetProperty("cheapestNearbyProvider").GetProperty("selectedPrice").GetDecimal());
         Assert.Equal(57.50m, payload.GetProperty("insurerPaymentEstimate").GetDecimal());
         Assert.Equal("AwayFromZero", payload.GetProperty("roundingMode").GetString());
+    }
+
+    [Fact]
+    public async Task EstimateCostAlias_ReturnsOk_WhenScopedKeyProvided()
+    {
+        using var factory = new EstimateWebFactory(allowScope: true);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-API-Key", "estimate-key");
+
+        var response = await client.PostAsJsonAsync("/estimate-cost", new EstimateRequest
+        {
+            ZipCode = "10001",
+            Insurer = "Aetna",
+            CptCode = "70551",
+            DeductibleRemaining = 1200,
+            CoinsurancePercent = 20,
+            Copay = 50,
+            OopMaxRemaining = 3000,
+            CopayAppliesBeforeDeductible = true
+        });
+
+        response.EnsureSuccessStatusCode();
     }
 
     [Fact]
@@ -110,6 +136,18 @@ public class EstimateEndpointsTests
         public Task<PricingSummary> GetPricingSummaryAsync(string zipCode, string insurer, string cptCode, CancellationToken cancellationToken)
         {
             return Task.FromResult(new PricingSummary(100m, 200m, 80m, 160m));
+        }
+
+        public Task<CheapestProviderSummary?> GetCheapestProviderAsync(string zipCode, string insurer, string cptCode, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<CheapestProviderSummary?>(new CheapestProviderSummary(
+                "Hospital A",
+                "New York",
+                "NY",
+                "10001",
+                100m,
+                80m,
+                100m));
         }
 
         public string FormatRange(decimal? minValue, decimal? maxValue)

@@ -38,6 +38,11 @@
 - Auth scope: `estimate:read`
 - Rate limiting policy: `api`
 
+### `POST /estimate-cost`
+- Purpose: alias for `/estimate` for frontend-friendly semantic naming.
+- Auth scope: `estimate:read`
+- Rate limiting policy: `api`
+
 Request body:
 ```json
 {
@@ -62,10 +67,37 @@ Response body:
   "cashPriceMin": 700.0,
   "cashPriceMax": 1000.0,
   "cashPriceRange": "$700.00 - $1000.00",
+  "expectedCostRange": "$900.00 - $1400.00",
+  "confidenceScore": 0.92,
+  "cheapestNearbyProvider": {
+    "providerName": "General Hospital",
+    "city": "New York",
+    "state": "NY",
+    "zipCode": "10001",
+    "negotiatedRate": 900.0,
+    "cashPrice": 700.0,
+    "selectedPrice": 900.0
+  },
   "insurerPaymentEstimate": 560.0,
   "roundingMode": "AwayFromZero"
 }
 ```
+
+## Catalog
+### `GET /procedures?search=705&limit=50`
+- Purpose: list/search procedure catalog by CPT code or description.
+- Auth scope: `estimate:read`
+- Query params:
+  - `search` (optional)
+  - `limit` (optional, default `50`, min `1`, max `200`)
+
+### `GET /providers?zipCode=10001&state=NY&limit=50`
+- Purpose: list provider catalog by geography.
+- Auth scope: `estimate:read`
+- Query params:
+  - `zipCode` (optional)
+  - `state` (optional)
+  - `limit` (optional, default `50`, min `1`, max `200`)
 
 ## Ingestion
 ### `POST /ingestion/import`

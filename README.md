@@ -1,21 +1,23 @@
 # HealthPilot Backend (C#)
 
-ASP.NET Core + EF Core + PostgreSQL backend for imaging pricing and benefit simulation.
+HealthPilot is an ASP.NET Core + EF Core + PostgreSQL healthcare pricing platform for out-of-pocket cost estimation.
 
-This is the canonical backend for HealthPilot.
+## Production-MVP Architecture
 
-## Phase 1 Scope
+- **Data ingestion layer**: streaming CSV/JSON ingestion (`/ingestion/import`) with checkpoint/resume support.
+- **ETL pipeline**: parser + normalization + persistence (`Ingestion/`, `Services/PricingPersistenceService.cs`).
+- **Procedure cost database**: normalized schema for procedures, providers, insurers, negotiated and cash rates.
+- **Insurance estimation engine**: benefit simulation + representative pricing selection.
+- **API layer**: estimate, ingestion, health, procedures, and providers endpoints.
+- **Frontend-ready API contract**: stable JSON responses optimized for direct client consumption.
 
-- MRI and CT imaging pricing
-- CPT-normalized schema
-- CMS pricing ingestion pipeline structure
-- Benefit simulation engine
-- `POST /estimate` endpoint
+## Supported Procedures
+
+- MRI, CT, X-ray, and lab/blood-test CPT workflows are supported through CPT-normalized ingestion and lookup.
 
 ## Run
 
 ```powershell
-cd backend
 dotnet restore
 dotnet ef database update --project .\src\HealthPilot.Api\HealthPilot.Api.csproj --startup-project .\src\HealthPilot.Api\HealthPilot.Api.csproj
 dotnet run --project .\src\HealthPilot.Api\HealthPilot.Api.csproj --urls "http://localhost:5050"
@@ -27,8 +29,11 @@ dotnet run --project .\src\HealthPilot.Api\HealthPilot.Api.csproj --urls "http:/
 - Non-development startup requires either `Security:ApiKey` or `Security:ApiKeys`.
 - Scoped API keys are supported via `Security:ApiKeys`.
 - Endpoint scopes:
-  - `/estimate` requires `estimate:read`
-  - `/ingestion/import` requires `ingestion:write`
+- `/estimate` requires `estimate:read`
+- `/estimate-cost` requires `estimate:read`
+- `/procedures` requires `estimate:read`
+- `/providers` requires `estimate:read`
+- `/ingestion/import` requires `ingestion:write`
 - Rate limiting is enabled and config-driven via `RateLimiting`.
 
 Example scoped key config:
@@ -48,6 +53,9 @@ Example scoped key config:
 - `GET /health` liveness probe.
 - `GET /health/ready` readiness probe (DB + pending migrations).
 - `POST /estimate` estimate endpoint.
+- `POST /estimate-cost` estimate endpoint alias with same contract.
+- `GET /procedures` procedure catalog lookup.
+- `GET /providers` provider catalog lookup.
 - `POST /ingestion/import` ingestion endpoint (sync or async job queue via `async: true`).
 - `GET /ingestion/jobs/{jobId}` ingestion job lifecycle status.
 - `POST /ingestion/jobs/{jobId}/replay` deterministic replay enqueue.
@@ -72,6 +80,26 @@ cd backend
 
 - API reference: `API_DOCUMENTATION.md`
 - Runbook: `RUNBOOK.md`
+
+## Data Source Download Script
+
+Use the streaming downloader for public transparency files (hospital machine-readable files, insurer files, and CMS datasets):
+
+```bash
+python scripts/data/download_transparency_data.py \
+  --url "https://example.org/hospital-mrf.json" \
+  --url "https://example.org/insurer-transparency.csv" \
+  --out-dir data/raw \
+  --manifest data/raw/manifest.json
+```
+
+## Deployment
+
+Containerized deployment is included:
+
+```bash
+docker compose up --build
+```
 
 ## Structure
 

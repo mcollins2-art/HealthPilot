@@ -9,6 +9,9 @@ public class EstimateResponse
     public decimal? CashPriceMin { get; set; }
     public decimal? CashPriceMax { get; set; }
     public required string CashPriceRange { get; set; }
+    public required string ExpectedCostRange { get; set; }
+    public decimal ConfidenceScore { get; set; }
+    public CheapestProviderResponse? CheapestNearbyProvider { get; set; }
     public decimal InsurerPaymentEstimate { get; set; }
     public required string RoundingMode { get; set; }
 }

@@ -23,6 +23,7 @@ if (!builder.Environment.IsDevelopment()
 // boundary for the API and can be tuned further for pooling and resiliency.
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddMemoryCache();
 
 // Service registrations keep pricing retrieval and benefit logic separated.
 builder.Services.AddScoped<IPricingQueryService, PricingQueryService>();
@@ -71,6 +72,7 @@ if (app.Environment.IsDevelopment())
 
 // Endpoint definitions are split to keep Program.cs clean and scalable.
 app.MapHealthEndpoints();
+app.MapCatalogEndpoints();
 app.MapEstimateEndpoints();
 app.MapIngestionEndpoints();
 

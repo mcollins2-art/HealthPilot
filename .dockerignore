@@ -1,0 +1,6 @@
+**/bin/
+**/obj/
+**/TestResults/
+.git/
+.gitignore
+scripts/loadtest/*.json
