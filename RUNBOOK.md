@@ -40,6 +40,11 @@ $body = @{ filePath = "C:\\data\\cms-pricing.csv" } | ConvertTo-Json
 Invoke-RestMethod -Uri "http://localhost:5000/ingestion/import" -Method Post -Headers $headers -ContentType "application/json" -Body $body
 ```
 
+Operational notes:
+- `GET /ingestion/checkpoints` is read-only (it no longer deletes expired checkpoints).
+- Use `POST /ingestion/checkpoints/cleanup` for explicit retention cleanup actions.
+- Configure `Ingestion:MaxAttempts` to tune queued job retry attempts (minimum `1`, default `2`).
+
 ### 3.3 Pricing lifecycle cleanup (safe by default)
 ```powershell
 $headers = @{ "X-API-Key" = "<ingestion-key>" }

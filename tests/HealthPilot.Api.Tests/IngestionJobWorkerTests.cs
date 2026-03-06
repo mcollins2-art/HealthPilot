@@ -44,6 +44,7 @@ public class IngestionJobWorkerTests : IDisposable
         Assert.NotNull(job);
         Assert.Equal("dead_lettered", job!.Status);
         Assert.Equal(2, job.AttemptCount);
+        Assert.Contains("correlationId=", job.ErrorMessage);
     }
 
     [Fact]

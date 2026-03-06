@@ -222,6 +222,7 @@ public static class IngestionEndpoints
         try
         {
             var batchSize = request.BatchSize ?? configuration.GetValue<int?>("Ingestion:BatchSize") ?? 5000;
+            var maxAttempts = Math.Max(configuration.GetValue<int?>("Ingestion:MaxAttempts") ?? 2, 1);
             var parserVersion = extension == ".csv" ? "cms_csv_v1" : "cms_json_v1";
             var hash = await ComputeFileHashAsync(fullPath, cancellationToken);
 
@@ -236,6 +237,7 @@ public static class IngestionEndpoints
                 SourceSystem = request.SourceSystem,
                 FileHashSha256 = hash,
                 ParserVersion = parserVersion,
+                MaxAttempts = maxAttempts,
                 EffectiveStartUtc = request.EffectiveStartUtc,
                 EffectiveEndUtc = request.EffectiveEndUtc,
                 TenantId = httpContext.Items.TryGetValue("TenantId", out var tenantId) ? tenantId?.ToString() : null
@@ -307,7 +309,7 @@ public static class IngestionEndpoints
             {
                 job.Status = "dead_lettered";
                 job.AttemptCount += 1;
-                job.ErrorMessage = ex.Message;
+                job.ErrorMessage = BuildBoundedErrorMessage(ex, httpContext.TraceIdentifier);
                 job.UpdatedAtUtc = DateTimeOffset.UtcNow;
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
@@ -369,6 +371,7 @@ public static class IngestionEndpoints
             SourceSystem = sourceJob.SourceSystem,
             FileHashSha256 = sourceJob.FileHashSha256,
             ParserVersion = sourceJob.ParserVersion,
+            MaxAttempts = sourceJob.MaxAttempts,
             EffectiveStartUtc = sourceJob.EffectiveStartUtc,
             EffectiveEndUtc = sourceJob.EffectiveEndUtc,
             TenantId = sourceJob.TenantId
@@ -451,5 +454,11 @@ public static class IngestionEndpoints
         await using var stream = File.OpenRead(fullPath);
         var hash = await SHA256.HashDataAsync(stream, cancellationToken);
         return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static string BuildBoundedErrorMessage(Exception ex, string correlationId)
+    {
+        var message = $"{ex.GetType().Name}: {ex.Message} | correlationId={correlationId}";
+        return message.Length <= 2048 ? message : message[..2048];
     }
 }

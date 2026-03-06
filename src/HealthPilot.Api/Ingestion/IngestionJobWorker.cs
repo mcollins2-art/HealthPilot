@@ -1,5 +1,6 @@
 using HealthPilot.Api.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
 namespace HealthPilot.Api.Ingestion;
@@ -79,8 +80,10 @@ public sealed class IngestionJobWorker(
         }
         catch (Exception ex)
         {
+            var correlationId = Activity.Current?.Id ?? $"job-{job.Id}-attempt-{job.AttemptCount + 1}";
+            logger.LogWarning(ex, "Ingestion job processing failed for job {JobId}, correlationId={CorrelationId}", job.Id, correlationId);
             job.AttemptCount += 1;
-            job.ErrorMessage = ex.Message;
+            job.ErrorMessage = BuildBoundedErrorMessage(ex, correlationId);
             job.UpdatedAtUtc = DateTimeOffset.UtcNow;
 
             if (job.AttemptCount >= job.MaxAttempts)
@@ -96,5 +99,11 @@ public sealed class IngestionJobWorker(
 
             await dbContext.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    private static string BuildBoundedErrorMessage(Exception ex, string correlationId)
+    {
+        var message = $"{ex.GetType().Name}: {ex.Message} | correlationId={correlationId}";
+        return message.Length <= 2048 ? message : message[..2048];
     }
 }

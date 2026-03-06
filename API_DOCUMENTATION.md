@@ -75,6 +75,7 @@ Response body:
 - Allowed extensions: `.csv`, `.json`
 - Optional path guard: `Ingestion:AllowedRootPath`
 - Batch processing: enabled with `Ingestion:BatchSize` (default `5000`)
+- Retry policy: `Ingestion:MaxAttempts` controls queued job retry attempts (default `2`, minimum `1`)
 - Streaming behavior: both CSV and JSON imports are processed as streaming batches to reduce peak memory usage
 - Checkpoint/resume: import progress is checkpointed and can resume from last processed row
 - Async control plane: set `async: true` to enqueue a background ingestion job
@@ -114,7 +115,8 @@ Response body:
 - Purpose: list recent checkpoints for operations visibility.
 - Auth scope: `ingestion:write`
 - Query param: `limit` (optional, default `20`, min `1`, max `200`)
-- Retention: expired checkpoints are automatically cleaned based on `Ingestion:CheckpointRetentionHours`
+- Note: this endpoint is read-only and does not perform cleanup.
+- Retention cleanup is executed explicitly via `POST /ingestion/checkpoints/cleanup`.
 
 Response body:
 ```json

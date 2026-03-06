@@ -108,6 +108,19 @@ public class IngestionCheckpointServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ListRecentAsync_DoesNotDeleteExpiredCheckpoints()
+    {
+        var oldCheckpoint = await _service.GetOrCreateAsync("C:\\data\\list-no-delete-old.csv", 1000, CancellationToken.None);
+        var oldFile = Path.Combine(_tempDirectory, oldCheckpoint.CheckpointKey + ".json");
+        File.SetLastWriteTimeUtc(oldFile, DateTime.UtcNow.AddDays(-10));
+
+        var recent = await _service.ListRecentAsync(20, CancellationToken.None);
+
+        Assert.Contains(recent, x => x.CheckpointKey == oldCheckpoint.CheckpointKey);
+        Assert.True(File.Exists(oldFile));
+    }
+
+    [Fact]
     public async Task CleanupExpiredAsync_DeletesOnlyExpiredFiles()
     {
         var oldCheckpoint = await _service.GetOrCreateAsync("C:\\data\\old.csv", 1000, CancellationToken.None);

@@ -107,7 +107,6 @@ public class IngestionCheckpointService(IConfiguration configuration) : IIngesti
         try
         {
             Directory.CreateDirectory(CheckpointDirectory);
-            CleanupExpiredInternal(RetentionWindow);
 
             var files = Directory.EnumerateFiles(CheckpointDirectory, "*.json")
                 .Select(path => new FileInfo(path))

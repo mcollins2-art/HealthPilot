@@ -220,6 +220,39 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Import_UsesConfiguredMaxAttempts_ForCreatedJob()
+    {
+        var csv = Path.Combine(_tempDirectory, "max-attempts.csv");
+        await File.WriteAllTextAsync(csv,
+            "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price\n" +
+            "70551,Brain MRI,imaging,Test Hospital,hospital,Hoboken,NJ,07030,Plan A,1200,contracted,950");
+
+        using var scopedFactory = CreateFactory(new Dictionary<string, string?>
+        {
+            ["Ingestion:MaxAttempts"] = "5"
+        });
+        using var scopedClient = scopedFactory.CreateClient();
+        scopedClient.DefaultRequestHeaders.Add("X-API-Key", "ingestion-key");
+
+        var response = await scopedClient.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
+        {
+            FilePath = csv,
+            BatchSize = 100,
+            ResumeFromCheckpoint = false,
+            Async = true
+        });
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var jobId = payload.GetProperty("jobId").GetInt64();
+
+        using var scope = scopedFactory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var job = await dbContext.IngestionJobs.SingleAsync(x => x.Id == jobId);
+        Assert.Equal(5, job.MaxAttempts);
+    }
+
+    [Fact]
     public async Task Replay_ReturnsAccepted_ForExistingJob()
     {
         var csv = Path.Combine(_tempDirectory, "replay.csv");
@@ -244,6 +277,45 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
         var replayPayload = await replayResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(jobId, replayPayload.GetProperty("replayOfJobId").GetInt64());
         Assert.True(replayPayload.GetProperty("jobId").GetInt64() > jobId);
+    }
+
+    [Fact]
+    public async Task Replay_PreservesMaxAttempts_FromSourceJob()
+    {
+        var csv = Path.Combine(_tempDirectory, "replay-maxattempts.csv");
+        await File.WriteAllTextAsync(csv,
+            "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price\n" +
+            "70551,Brain MRI,imaging,Test Hospital,hospital,Hoboken,NJ,07030,Plan A,1200,contracted,950");
+
+        using var scopedFactory = CreateFactory(new Dictionary<string, string?>
+        {
+            ["Ingestion:MaxAttempts"] = "4"
+        });
+        using var scopedClient = scopedFactory.CreateClient();
+        scopedClient.DefaultRequestHeaders.Add("X-API-Key", "ingestion-key");
+
+        var importResponse = await scopedClient.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
+        {
+            FilePath = csv,
+            BatchSize = 100,
+            ResumeFromCheckpoint = false
+        });
+
+        importResponse.EnsureSuccessStatusCode();
+        var importPayload = await importResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var sourceJobId = importPayload.GetProperty("jobId").GetInt64();
+
+        var replayResponse = await scopedClient.PostAsync($"/ingestion/jobs/{sourceJobId}/replay", null);
+        replayResponse.EnsureSuccessStatusCode();
+        var replayPayload = await replayResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var replayJobId = replayPayload.GetProperty("jobId").GetInt64();
+
+        using var scope = scopedFactory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var sourceJob = await dbContext.IngestionJobs.SingleAsync(x => x.Id == sourceJobId);
+        var replayJob = await dbContext.IngestionJobs.SingleAsync(x => x.Id == replayJobId);
+        Assert.Equal(sourceJob.MaxAttempts, replayJob.MaxAttempts);
+        Assert.Equal(4, replayJob.MaxAttempts);
     }
 
     [Fact]
@@ -327,6 +399,14 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
         var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
         Assert.NotNull(problem);
         Assert.Equal("Ingestion failed", problem!.Title);
+
+        using var scope = throwingFactory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var failedJob = await dbContext.IngestionJobs
+            .OrderByDescending(x => x.Id)
+            .FirstAsync();
+        Assert.Equal("dead_lettered", failedJob.Status);
+        Assert.Contains("correlationId=", failedJob.ErrorMessage);
     }
 
     public Task DisposeAsync()
