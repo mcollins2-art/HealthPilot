@@ -8,8 +8,10 @@ namespace HealthPilot.Api.Ingestion;
 public class PricingIngestionPipeline(
     AppDbContext dbContext,
     IPricingPersistenceService pricingPersistenceService,
-    IIngestionCheckpointService checkpointService)
+    IIngestionCheckpointService checkpointService,
+    ILogger<PricingIngestionPipeline>? logger = null)
 {
+    private readonly ILogger<PricingIngestionPipeline> _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<PricingIngestionPipeline>.Instance;
     // Dispatches parser based on file type and returns normalized records.
     public async Task<IReadOnlyList<StructuredPricingRecord>> ParseAsync(string filePath, CancellationToken cancellationToken)
     {
@@ -36,7 +38,8 @@ public class PricingIngestionPipeline(
         string filePath,
         int batchSize,
         bool resumeFromCheckpoint,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? fileHashSha256 = null)
     {
         if (batchSize < 1)
         {
@@ -46,8 +49,8 @@ public class PricingIngestionPipeline(
         var extension = Path.GetExtension(filePath).ToLowerInvariant();
         return extension switch
         {
-            ".csv" => await ImportCsvWithBatchingAsync(filePath, batchSize, resumeFromCheckpoint, cancellationToken),
-            ".json" => await ImportJsonWithBatchingAsync(filePath, batchSize, resumeFromCheckpoint, cancellationToken),
+            ".csv" => await ImportCsvWithBatchingAsync(filePath, batchSize, resumeFromCheckpoint, cancellationToken, fileHashSha256),
+            ".json" => await ImportJsonWithBatchingAsync(filePath, batchSize, resumeFromCheckpoint, cancellationToken, fileHashSha256),
             _ => throw new NotSupportedException($"Unsupported file extension: {extension}")
         };
     }
@@ -56,9 +59,10 @@ public class PricingIngestionPipeline(
         string filePath,
         int batchSize,
         bool resumeFromCheckpoint,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? fileHashSha256)
     {
-        var checkpoint = await checkpointService.GetOrCreateAsync(filePath, batchSize, cancellationToken);
+        var checkpoint = await checkpointService.GetOrCreateAsync(filePath, batchSize, cancellationToken, fileHashSha256);
         var resumeOffset = resumeFromCheckpoint ? checkpoint.RowsProcessed : 0;
 
         if (!resumeFromCheckpoint && checkpoint.RowsProcessed != 0)
@@ -68,6 +72,7 @@ public class PricingIngestionPipeline(
 
         var aggregate = new PricingPersistenceResult();
         var batch = new List<StructuredPricingRecord>(batchSize);
+        var parseErrors = new List<IngestionRowParseError>();
         var rowsSeen = 0;
 
         foreach (var row in PricingLoader.StreamCsvRows(filePath))
@@ -80,7 +85,7 @@ public class PricingIngestionPipeline(
                 continue;
             }
 
-            var mapped = MapRow(row);
+            var mapped = MapRow(row, csvRowNumber: rowsSeen + 1, jsonPath: null, parseErrors);
             if (mapped is null)
             {
                 continue;
@@ -112,6 +117,7 @@ public class PricingIngestionPipeline(
             CheckpointKey = checkpoint.CheckpointKey,
             RowsResumedFrom = resumeOffset,
             RowsProcessed = rowsSeen,
+            ParseErrors = parseErrors,
             Completed = true
         };
     }
@@ -120,9 +126,10 @@ public class PricingIngestionPipeline(
         string filePath,
         int batchSize,
         bool resumeFromCheckpoint,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? fileHashSha256)
     {
-        var checkpoint = await checkpointService.GetOrCreateAsync(filePath, batchSize, cancellationToken);
+        var checkpoint = await checkpointService.GetOrCreateAsync(filePath, batchSize, cancellationToken, fileHashSha256);
         var resumeOffset = resumeFromCheckpoint ? checkpoint.RowsProcessed : 0;
 
         if (!resumeFromCheckpoint && checkpoint.RowsProcessed != 0)
@@ -132,6 +139,7 @@ public class PricingIngestionPipeline(
 
         var aggregate = new PricingPersistenceResult();
         var batch = new List<StructuredPricingRecord>(batchSize);
+        var parseErrors = new List<IngestionRowParseError>();
         var rowsSeen = 0;
 
         await foreach (var row in PricingLoader.StreamJsonRowsAsync(filePath, cancellationToken))
@@ -142,7 +150,7 @@ public class PricingIngestionPipeline(
                 continue;
             }
 
-            var mapped = MapRow(row);
+            var mapped = MapRow(row, csvRowNumber: null, jsonPath: $"$[{rowsSeen - 1}]", parseErrors);
             if (mapped is null)
             {
                 continue;
@@ -174,15 +182,32 @@ public class PricingIngestionPipeline(
             CheckpointKey = checkpoint.CheckpointKey,
             RowsResumedFrom = resumeOffset,
             RowsProcessed = rowsSeen,
+            ParseErrors = parseErrors,
             Completed = true
         };
     }
 
-    private static StructuredPricingRecord? MapRow(Dictionary<string, string> row)
+    private StructuredPricingRecord? MapRow(
+        Dictionary<string, string> row,
+        int? csvRowNumber,
+        string? jsonPath,
+        List<IngestionRowParseError> parseErrors)
     {
         string cpt = Normalizers.NormalizeCptCode(GetValue(row, "cpt_code"));
-        if (string.IsNullOrWhiteSpace(cpt))
+        if (!Normalizers.IsValidCptOrHcpcs(cpt))
         {
+            var parseError = new IngestionRowParseError
+            {
+                CsvRowNumber = csvRowNumber,
+                JsonPath = jsonPath,
+                Message = "Invalid CPT/HCPCS format."
+            };
+            parseErrors.Add(parseError);
+            _logger.LogWarning(
+                "Skipping ingestion row with invalid CPT/HCPCS. CsvRow={CsvRowNumber}, JsonPath={JsonPath}, CptCode={CptCode}",
+                csvRowNumber,
+                jsonPath,
+                cpt);
             return null;
         }
 

@@ -37,6 +37,7 @@
 - Purpose: estimate patient out-of-pocket and insurer payment.
 - Auth scope: `estimate:read`
 - Rate limiting policy: `api`
+- Pricing fallback behavior: when negotiated pricing is unavailable for the CPT+insurer+ZIP combination, the estimate simulation uses `0` as the representative negotiated rate.
 
 Request body:
 ```json
@@ -62,6 +63,7 @@ Response body:
   "cashPriceMin": 700.0,
   "cashPriceMax": 1000.0,
   "cashPriceRange": "$700.00 - $1000.00",
+  "pricingLastUpdatedAt": "2026-03-01T12:00:00Z",
   "insurerPaymentEstimate": 560.0,
   "roundingMode": "AwayFromZero"
 }
@@ -79,6 +81,7 @@ Response body:
 - Checkpoint/resume: import progress is checkpointed and can resume from last processed row
 - Async control plane: set `async: true` to enqueue a background ingestion job
 - Checkpoints: persisted in database for durable resume across process restarts
+- Idempotency: duplicate file content hashes and duplicate `idempotencyKey` values are rejected with `409 Conflict`
 - Max file size: 1 GB
 
 Request body:
@@ -88,6 +91,7 @@ Request body:
   "batchSize": 5000,
   "resumeFromCheckpoint": true,
   "async": true,
+  "idempotencyKey": "cms-mrf-2026-01-01-batch-01",
   "sourceSystem": "cms_mrf",
   "effectiveStartUtc": "2026-01-01T00:00:00Z",
   "effectiveEndUtc": "2026-12-31T23:59:59Z"
@@ -137,6 +141,8 @@ Response body:
 - Purpose: manually delete expired checkpoint records.
 - Auth scope: `ingestion:write`
 - Query param: `retentionHours` (optional, minimum `1`; defaults to `Ingestion:CheckpointRetentionHours`)
+- Idempotency: endpoint is idempotent for the same retention window.
+- Safety during import: safe to run while imports are active; only checkpoints older than the cutoff are removed.
 
 Response body:
 ```json
@@ -162,6 +168,13 @@ Success response includes persistence metrics:
   "jobId": 42,
   "rowsResumedFrom": 0,
   "rowsProcessed": 100000,
+  "parserErrors": [
+    {
+      "csvRowNumber": 101,
+      "jsonPath": null,
+      "message": "Invalid CPT/HCPCS format."
+    }
+  ],
   "completed": true,
   "traceId": "..."
 }
@@ -189,6 +202,8 @@ Async response:
 ### `POST /ingestion/pricing/cleanup?retentionDays=365`
 - Purpose: lifecycle cleanup for stale negotiated/cash pricing rows.
 - Auth scope: `ingestion:write`
+- Idempotency: endpoint is idempotent for the same retention window.
+- Safety during import: safe to run during active imports because only stale rows older than the retention cutoff are deleted.
 
 ## Error model
 - `401`: missing or invalid API key.

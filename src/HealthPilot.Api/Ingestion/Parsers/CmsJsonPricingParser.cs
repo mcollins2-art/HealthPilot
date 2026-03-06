@@ -19,7 +19,7 @@ public class CmsJsonPricingParser : IPricingParser
         foreach (JsonElement row in root.EnumerateArray())
         {
             string cpt = Normalizers.NormalizeCptCode(row.GetPropertyOrDefault("cpt_code"));
-            if (string.IsNullOrWhiteSpace(cpt))
+            if (!Normalizers.IsValidCptOrHcpcs(cpt))
             {
                 continue;
             }

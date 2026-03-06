@@ -10,7 +10,14 @@ public class UnhandledExceptionMiddleware(RequestDelegate next, ILogger<Unhandle
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Unhandled exception for path {Path} trace={TraceId}", context.Request.Path, context.TraceIdentifier);
+            var bodySize = context.Request.ContentLength ?? 0;
+            logger.LogError(
+                ex,
+                "Unhandled exception for method {Method} path {Path} bodyBytes={BodyBytes} trace={TraceId}",
+                context.Request.Method,
+                context.Request.Path,
+                bodySize,
+                context.TraceIdentifier);
 
             if (!context.Response.HasStarted)
             {

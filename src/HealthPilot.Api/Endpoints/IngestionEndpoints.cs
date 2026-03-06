@@ -224,6 +224,47 @@ public static class IngestionEndpoints
             var batchSize = request.BatchSize ?? configuration.GetValue<int?>("Ingestion:BatchSize") ?? 5000;
             var parserVersion = extension == ".csv" ? "cms_csv_v1" : "cms_json_v1";
             var hash = await ComputeFileHashAsync(fullPath, cancellationToken);
+            var normalizedIdempotencyKey = string.IsNullOrWhiteSpace(request.IdempotencyKey)
+                ? null
+                : request.IdempotencyKey.Trim();
+
+            var duplicateByHash = await dbContext.IngestionJobs
+                .AsNoTracking()
+                .Where(x => x.FileHashSha256 == hash)
+                .OrderByDescending(x => x.CreatedAtUtc)
+                .Select(x => new { x.Id, x.Status })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (duplicateByHash is not null)
+            {
+                return Results.Conflict(new ProblemDetails
+                {
+                    Title = "Duplicate import",
+                    Detail = $"File content was already imported (jobId={duplicateByHash.Id}, status={duplicateByHash.Status}).",
+                    Status = StatusCodes.Status409Conflict,
+                    Instance = httpContext.TraceIdentifier
+                });
+            }
+
+            if (normalizedIdempotencyKey is not null)
+            {
+                var duplicateByIdempotencyKey = await dbContext.IngestionJobs
+                    .AsNoTracking()
+                    .Where(x => x.IdempotencyKey == normalizedIdempotencyKey)
+                    .OrderByDescending(x => x.CreatedAtUtc)
+                    .Select(x => new { x.Id, x.Status })
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (duplicateByIdempotencyKey is not null)
+                {
+                    return Results.Conflict(new ProblemDetails
+                    {
+                        Title = "Duplicate import",
+                        Detail = $"Idempotency key was already used (jobId={duplicateByIdempotencyKey.Id}, status={duplicateByIdempotencyKey.Status}).",
+                        Status = StatusCodes.Status409Conflict,
+                        Instance = httpContext.TraceIdentifier
+                    });
+                }
+            }
 
             job = new IngestionJob
             {
@@ -234,6 +275,7 @@ public static class IngestionEndpoints
                 BatchSize = batchSize,
                 ResumeFromCheckpoint = request.ResumeFromCheckpoint,
                 SourceSystem = request.SourceSystem,
+                IdempotencyKey = normalizedIdempotencyKey,
                 FileHashSha256 = hash,
                 ParserVersion = parserVersion,
                 EffectiveStartUtc = request.EffectiveStartUtc,
@@ -261,13 +303,14 @@ public static class IngestionEndpoints
                 fullPath,
                 batchSize,
                 request.ResumeFromCheckpoint,
-                cancellationToken);
+                cancellationToken,
+                hash);
 
             job.Status = "completed";
             job.CheckpointKey = result.CheckpointKey;
             job.RowsProcessed = result.RowsProcessed;
             job.RecordsReceived = result.Persistence.RecordsReceived;
-            job.RecordsSkipped = result.Persistence.RecordsSkipped;
+            job.RecordsSkipped = result.Persistence.RecordsSkipped + result.ParseErrors.Count;
             job.UpdatedAtUtc = DateTimeOffset.UtcNow;
             await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -286,7 +329,7 @@ public static class IngestionEndpoints
             {
                 status = "completed",
                 result.Persistence.RecordsReceived,
-                result.Persistence.RecordsSkipped,
+                recordsSkipped = result.Persistence.RecordsSkipped + result.ParseErrors.Count,
                 result.Persistence.ProceduresCreated,
                 result.Persistence.FacilitiesCreated,
                 result.Persistence.InsurersCreated,
@@ -296,6 +339,7 @@ public static class IngestionEndpoints
                 jobId = job.Id,
                 result.RowsResumedFrom,
                 result.RowsProcessed,
+                parserErrors = result.ParseErrors,
                 result.Completed,
                 traceId = httpContext.TraceIdentifier
             });
@@ -353,6 +397,7 @@ public static class IngestionEndpoints
             ResumeFromCheckpoint = false,
             ReplayOfJobId = sourceJob.Id,
             SourceSystem = sourceJob.SourceSystem,
+            IdempotencyKey = null,
             FileHashSha256 = sourceJob.FileHashSha256,
             ParserVersion = sourceJob.ParserVersion,
             EffectiveStartUtc = sourceJob.EffectiveStartUtc,

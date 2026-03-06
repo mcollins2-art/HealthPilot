@@ -12,7 +12,7 @@ public class CmsCsvPricingParser : IPricingParser
         foreach (var row in rows)
         {
             string cpt = Normalizers.NormalizeCptCode(GetValue(row, "cpt_code"));
-            if (string.IsNullOrWhiteSpace(cpt))
+            if (!Normalizers.IsValidCptOrHcpcs(cpt))
             {
                 continue;
             }

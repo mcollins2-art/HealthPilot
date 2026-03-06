@@ -1,4 +1,5 @@
 using HealthPilot.Api.Dtos;
+using HealthPilot.Api.Ingestion;
 using HealthPilot.Api.Middleware;
 using HealthPilot.Api.Services;
 
@@ -27,11 +28,21 @@ public static class EstimateEndpoints
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
+        var normalizedCpt = Normalizers.NormalizeCptCode(request.CptCode);
+        if (!Normalizers.IsValidCptOrHcpcs(normalizedCpt))
+        {
+            return Results.BadRequest(new
+            {
+                error = "Invalid CPT/HCPCS code format. Expected 5 alphanumeric CPT or 4-2 HCPCS format.",
+                traceId = httpContext.TraceIdentifier
+            });
+        }
+
         // Retrieve negotiated/cash pricing window for requested geography + CPT + insurer.
         PricingSummary pricing = await pricingQueryService.GetPricingSummaryAsync(
             request.ZipCode,
             request.Insurer,
-            request.CptCode,
+            normalizedCpt,
             cancellationToken);
 
         decimal representativeRate = pricingSelectionStrategy.SelectRepresentativeRate(pricing);
@@ -60,6 +71,7 @@ public static class EstimateEndpoints
             CashPriceMin = pricing.CashMin,
             CashPriceMax = pricing.CashMax,
             CashPriceRange = pricingQueryService.FormatRange(pricing.CashMin, pricing.CashMax),
+            PricingLastUpdatedAt = pricing.PricingLastUpdatedAt,
             InsurerPaymentEstimate = simulation.InsurerPayment,
             RoundingMode = MonetaryPolicy.RoundingMode.ToString()
         };

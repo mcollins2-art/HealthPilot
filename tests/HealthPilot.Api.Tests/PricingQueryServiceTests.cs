@@ -2,6 +2,7 @@ using HealthPilot.Api.Data;
 using HealthPilot.Api.Models;
 using HealthPilot.Api.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace HealthPilot.Api.Tests;
@@ -14,7 +15,7 @@ public class PricingQueryServiceTests
         await using var fixture = await TestDbFixture.CreateAsync();
         await SeedFacilityAsync(fixture.DbContext, "10001");
 
-        var service = new PricingQueryService(fixture.DbContext);
+        var service = new PricingQueryService(fixture.DbContext, NullLogger<PricingQueryService>.Instance);
         var summary = await service.GetPricingSummaryAsync("10001", "Aetna", "70551", CancellationToken.None);
 
         Assert.Null(summary.NegotiatedMin);
@@ -32,7 +33,7 @@ public class PricingQueryServiceTests
         fixture.DbContext.Procedures.Add(procedure);
         await fixture.DbContext.SaveChangesAsync();
 
-        var service = new PricingQueryService(fixture.DbContext);
+        var service = new PricingQueryService(fixture.DbContext, NullLogger<PricingQueryService>.Instance);
         var summary = await service.GetPricingSummaryAsync("99999", "Aetna", "70551", CancellationToken.None);
 
         Assert.Null(summary.NegotiatedMin);
@@ -58,7 +59,7 @@ public class PricingQueryServiceTests
             new CashPrice { ProcedureId = procedure.Id, FacilityId = facilityB.Id, CashPriceAmount = 1200m, LastUpdated = DateTimeOffset.UtcNow });
         await fixture.DbContext.SaveChangesAsync();
 
-        var service = new PricingQueryService(fixture.DbContext);
+        var service = new PricingQueryService(fixture.DbContext, NullLogger<PricingQueryService>.Instance);
         var summary = await service.GetPricingSummaryAsync("10001", "Unknown Insurer", "70551", CancellationToken.None);
 
         Assert.Null(summary.NegotiatedMin);
@@ -81,30 +82,32 @@ public class PricingQueryServiceTests
         fixture.DbContext.Insurers.Add(insurer);
         await fixture.DbContext.SaveChangesAsync();
 
+        var now = DateTimeOffset.UtcNow;
         fixture.DbContext.CashPrices.AddRange(
-            new CashPrice { ProcedureId = procedure.Id, FacilityId = facilityA.Id, CashPriceAmount = 800m, LastUpdated = DateTimeOffset.UtcNow },
-            new CashPrice { ProcedureId = procedure.Id, FacilityId = facilityB.Id, CashPriceAmount = 1300m, LastUpdated = DateTimeOffset.UtcNow });
+            new CashPrice { ProcedureId = procedure.Id, FacilityId = facilityA.Id, CashPriceAmount = 800m, LastUpdated = now.AddMinutes(-10) },
+            new CashPrice { ProcedureId = procedure.Id, FacilityId = facilityB.Id, CashPriceAmount = 1300m, LastUpdated = now.AddMinutes(-5) });
 
         fixture.DbContext.NegotiatedRates.AddRange(
-            new NegotiatedRate { ProcedureId = procedure.Id, FacilityId = facilityA.Id, InsurerId = insurer.Id, Rate = 950m, RateType = "contracted", LastUpdated = DateTimeOffset.UtcNow },
-            new NegotiatedRate { ProcedureId = procedure.Id, FacilityId = facilityB.Id, InsurerId = insurer.Id, Rate = 1100m, RateType = "contracted", LastUpdated = DateTimeOffset.UtcNow });
+            new NegotiatedRate { ProcedureId = procedure.Id, FacilityId = facilityA.Id, InsurerId = insurer.Id, Rate = 950m, RateType = "contracted", LastUpdated = now.AddMinutes(-2) },
+            new NegotiatedRate { ProcedureId = procedure.Id, FacilityId = facilityB.Id, InsurerId = insurer.Id, Rate = 1100m, RateType = "contracted", LastUpdated = now });
 
         await fixture.DbContext.SaveChangesAsync();
 
-        var service = new PricingQueryService(fixture.DbContext);
+        var service = new PricingQueryService(fixture.DbContext, NullLogger<PricingQueryService>.Instance);
         var summary = await service.GetPricingSummaryAsync(" 10001 ", " Aetna ", "70551", CancellationToken.None);
 
         Assert.Equal(950m, summary.NegotiatedMin);
         Assert.Equal(1100m, summary.NegotiatedMax);
         Assert.Equal(800m, summary.CashMin);
         Assert.Equal(1300m, summary.CashMax);
+        Assert.Equal(now, summary.PricingLastUpdatedAt);
     }
 
     [Fact]
     public async Task FormatRange_ReturnsExpectedOutput()
     {
         await using var fixture = await TestDbFixture.CreateAsync();
-        var service = new PricingQueryService(fixture.DbContext);
+        var service = new PricingQueryService(fixture.DbContext, NullLogger<PricingQueryService>.Instance);
 
         Assert.Equal("N/A", service.FormatRange(null, 100m));
         Assert.Equal("N/A", service.FormatRange(100m, null));

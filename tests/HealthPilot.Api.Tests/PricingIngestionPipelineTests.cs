@@ -444,7 +444,7 @@ public class PricingIngestionPipelineTests : IDisposable
         public List<int> SavedProgress { get; } = new();
         public IngestionCheckpointRecord? Completed { get; private set; }
 
-        public Task<IngestionCheckpointRecord> GetOrCreateAsync(string filePath, int batchSize, CancellationToken cancellationToken)
+        public Task<IngestionCheckpointRecord> GetOrCreateAsync(string filePath, int batchSize, CancellationToken cancellationToken, string? fileHashSha256 = null)
         {
             _record.FilePath = Path.GetFullPath(filePath);
             _record.BatchSize = batchSize;

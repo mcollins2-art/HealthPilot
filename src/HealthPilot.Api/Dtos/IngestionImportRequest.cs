@@ -13,6 +13,8 @@ public class IngestionImportRequest
 
     public bool ResumeFromCheckpoint { get; set; } = true;
     public bool Async { get; set; }
+    [MaxLength(128)]
+    public string? IdempotencyKey { get; set; }
     public string? SourceSystem { get; set; }
     public DateTimeOffset? EffectiveStartUtc { get; set; }
     public DateTimeOffset? EffectiveEndUtc { get; set; }

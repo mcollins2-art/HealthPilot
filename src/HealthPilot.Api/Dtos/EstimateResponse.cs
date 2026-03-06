@@ -9,6 +9,7 @@ public class EstimateResponse
     public decimal? CashPriceMin { get; set; }
     public decimal? CashPriceMax { get; set; }
     public required string CashPriceRange { get; set; }
+    public DateTimeOffset? PricingLastUpdatedAt { get; set; }
     public decimal InsurerPaymentEstimate { get; set; }
     public required string RoundingMode { get; set; }
 }

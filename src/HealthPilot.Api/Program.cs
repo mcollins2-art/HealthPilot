@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+ValidateStartupConfiguration(builder.Configuration);
 
 var hasLegacyApiKey = !string.IsNullOrWhiteSpace(builder.Configuration["Security:ApiKey"]);
 var hasScopedApiKeys = builder.Configuration.GetSection("Security:ApiKeys").GetChildren().Any();
@@ -42,7 +43,7 @@ builder.Services.AddRateLimiter(options =>
 
     var permitLimit = builder.Configuration.GetValue<int?>("RateLimiting:PermitLimit") ?? 120;
     var windowSeconds = builder.Configuration.GetValue<int?>("RateLimiting:WindowSeconds") ?? 60;
-    var queueLimit = builder.Configuration.GetValue<int?>("RateLimiting:QueueLimit") ?? 0;
+    var queueLimit = builder.Configuration.GetValue<int?>("RateLimiting:QueueLimit") ?? 5;
 
     options.AddFixedWindowLimiter("api", limiterOptions =>
     {
@@ -75,5 +76,39 @@ app.MapEstimateEndpoints();
 app.MapIngestionEndpoints();
 
 app.Run();
+
+static void ValidateStartupConfiguration(IConfiguration configuration)
+{
+    var permitLimit = configuration.GetValue<int?>("RateLimiting:PermitLimit") ?? 120;
+    var windowSeconds = configuration.GetValue<int?>("RateLimiting:WindowSeconds") ?? 60;
+    var queueLimit = configuration.GetValue<int?>("RateLimiting:QueueLimit") ?? 5;
+    var batchSize = configuration.GetValue<int?>("Ingestion:BatchSize") ?? 5000;
+    var checkpointRetentionHours = configuration.GetValue<int?>("Ingestion:CheckpointRetentionHours") ?? 168;
+
+    if (permitLimit < 1)
+    {
+        throw new InvalidOperationException("RateLimiting:PermitLimit must be >= 1.");
+    }
+
+    if (windowSeconds < 1)
+    {
+        throw new InvalidOperationException("RateLimiting:WindowSeconds must be >= 1.");
+    }
+
+    if (queueLimit < 1)
+    {
+        throw new InvalidOperationException("RateLimiting:QueueLimit must be >= 1.");
+    }
+
+    if (batchSize < 1)
+    {
+        throw new InvalidOperationException("Ingestion:BatchSize must be >= 1.");
+    }
+
+    if (checkpointRetentionHours < 1)
+    {
+        throw new InvalidOperationException("Ingestion:CheckpointRetentionHours must be >= 1.");
+    }
+}
 
 public partial class Program;

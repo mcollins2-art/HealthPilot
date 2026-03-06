@@ -27,10 +27,10 @@ public class IngestionCheckpointService(IConfiguration configuration) : IIngesti
             ? Path.Combine(AppContext.BaseDirectory, "ingestion-checkpoints")
             : Path.GetFullPath(configuration["Ingestion:CheckpointDirectory"]!);
 
-    public async Task<IngestionCheckpointRecord> GetOrCreateAsync(string filePath, int batchSize, CancellationToken cancellationToken)
+    public async Task<IngestionCheckpointRecord> GetOrCreateAsync(string filePath, int batchSize, CancellationToken cancellationToken, string? fileHashSha256 = null)
     {
         var normalizedPath = Path.GetFullPath(filePath);
-        var key = ComputeCheckpointKey(normalizedPath, batchSize);
+        var key = ComputeCheckpointKey(normalizedPath, batchSize, fileHashSha256);
 
         await _lock.WaitAsync(cancellationToken);
         try
@@ -198,9 +198,10 @@ public class IngestionCheckpointService(IConfiguration configuration) : IIngesti
         return Path.Combine(CheckpointDirectory, $"{checkpointKey}.json");
     }
 
-    private static string ComputeCheckpointKey(string normalizedFilePath, int batchSize)
+    private static string ComputeCheckpointKey(string normalizedFilePath, int batchSize, string? fileHashSha256)
     {
-        var content = $"{normalizedFilePath}|{batchSize}";
+        var keySource = string.IsNullOrWhiteSpace(fileHashSha256) ? normalizedFilePath : fileHashSha256;
+        var content = $"{keySource}|{batchSize}";
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(content));
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }
