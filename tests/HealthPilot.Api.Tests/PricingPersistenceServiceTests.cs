@@ -268,6 +268,46 @@ public class PricingPersistenceServiceTests
 		Assert.Equal("contracted", rate.RateType);
 	}
 
+	[Theory]
+	[InlineData(0)]
+	[InlineData(-10)]
+	[InlineData(100000)]
+	public async Task UpsertPricingDataAsync_SkipsOutOfBoundsNegotiatedRates(decimal negotiatedRate)
+	{
+		await using var fixture = await TestDbFixture.CreateAsync();
+		var service = CreateService(fixture.DbContext);
+
+		var result = await service.UpsertPricingDataAsync([
+			CreateRecord(negotiatedRate: negotiatedRate, cashPrice: null)
+		], CancellationToken.None);
+
+		Assert.Equal(0, result.NegotiatedRatesUpserted);
+		Assert.Equal(0, await fixture.DbContext.NegotiatedRates.CountAsync());
+	}
+
+	[Fact]
+	public async Task UpsertPricingDataAsync_PersistsNegotiatedRatePolicyMetadata()
+	{
+		await using var fixture = await TestDbFixture.CreateAsync();
+		var service = CreateService(fixture.DbContext);
+		var effectiveStart = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+		var effectiveEnd = new DateTimeOffset(2026, 3, 31, 23, 59, 59, TimeSpan.Zero);
+
+		await service.UpsertPricingDataAsync([
+			CreateRecord(
+				negotiatedRate: 1200m,
+				cashPrice: null,
+				policyVersion: "Aetna-2026-Q1",
+				effectiveStartUtc: effectiveStart,
+				effectiveEndUtc: effectiveEnd)
+		], CancellationToken.None);
+
+		var rate = await fixture.DbContext.NegotiatedRates.SingleAsync();
+		Assert.Equal("Aetna-2026-Q1", rate.PolicyVersion);
+		Assert.Equal(effectiveStart, rate.EffectiveStartUtc);
+		Assert.Equal(effectiveEnd, rate.EffectiveEndUtc);
+	}
+
 	[Fact]
 	public async Task UpsertPricingDataAsync_RollsBackAndThrows_WhenSaveFails()
 	{
@@ -442,7 +482,10 @@ public class PricingPersistenceServiceTests
 		string? insurerName = "Aetna",
 		decimal? negotiatedRate = 1200m,
 		string negotiatedRateType = "contracted",
-		decimal? cashPrice = 1000m)
+		decimal? cashPrice = 1000m,
+		string? policyVersion = null,
+		DateTimeOffset? effectiveStartUtc = null,
+		DateTimeOffset? effectiveEndUtc = null)
 	{
 		return new StructuredPricingRecord
 		{
@@ -457,6 +500,9 @@ public class PricingPersistenceServiceTests
 			InsurerName = insurerName,
 			NegotiatedRate = negotiatedRate,
 			NegotiatedRateType = negotiatedRateType,
+			PolicyVersion = policyVersion,
+			EffectiveStartUtc = effectiveStartUtc,
+			EffectiveEndUtc = effectiveEndUtc,
 			CashPrice = cashPrice,
 			LastUpdated = DateTimeOffset.UtcNow
 		};

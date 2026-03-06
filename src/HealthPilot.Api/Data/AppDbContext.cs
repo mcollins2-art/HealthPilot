@@ -56,6 +56,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
             entity.Property(x => x.Rate).HasPrecision(12, 2);
             entity.Property(x => x.RateType).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.PolicyVersion).HasMaxLength(100);
             entity.Property(x => x.LastUpdated).IsRequired();
 
             entity.HasOne(x => x.Procedure)
@@ -75,6 +76,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
             entity.HasIndex(x => new { x.ProcedureId, x.InsurerId, x.FacilityId });
             entity.HasIndex(x => x.LastUpdated);
+            entity.HasIndex(x => new { x.EffectiveStartUtc, x.EffectiveEndUtc });
         });
 
         modelBuilder.Entity<CashPrice>(entity =>

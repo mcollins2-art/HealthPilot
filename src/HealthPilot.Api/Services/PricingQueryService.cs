@@ -36,34 +36,61 @@ public class PricingQueryService(AppDbContext dbContext) : IPricingQueryService
 
         if (!procedureId.HasValue || facilityIds.Count == 0)
         {
-            return new PricingSummary(null, null, null, null);
+            return new PricingSummary(null, null, null, null, facilityIds.Count, null, null);
         }
 
-        var cashQuery = dbContext.CashPrices
+        var cashRows = await dbContext.CashPrices
             .AsNoTracking()
             .Where(c => c.ProcedureId == procedureId.Value && facilityIds.Contains(c.FacilityId))
-            .Select(c => (decimal?)c.CashPriceAmount);
+            .Select(c => new { Amount = (decimal?)c.CashPriceAmount, c.LastUpdated })
+            .ToListAsync(cancellationToken);
 
-        var cashMin = await cashQuery.DefaultIfEmpty().MinAsync(cancellationToken);
-        var cashMax = await cashQuery.DefaultIfEmpty().MaxAsync(cancellationToken);
+        var cashMin = cashRows.Count == 0 ? null : cashRows.Min(c => c.Amount);
+        var cashMax = cashRows.Count == 0 ? null : cashRows.Max(c => c.Amount);
+        var dataAsOfDate = cashRows.Count == 0 ? (DateTimeOffset?)null : cashRows.Max(c => c.LastUpdated);
 
         decimal? negotiatedMin = null;
         decimal? negotiatedMax = null;
+        string? matchedInsurer = null;
 
         if (insurerId.HasValue)
         {
-            var negotiatedQuery = dbContext.NegotiatedRates
+            var negotiatedRows = await dbContext.NegotiatedRates
                 .AsNoTracking()
                 .Where(r => r.ProcedureId == procedureId.Value
                             && r.InsurerId == insurerId.Value
                             && facilityIds.Contains(r.FacilityId))
-                .Select(r => (decimal?)r.Rate);
+                .Select(r => new { Amount = (decimal?)r.Rate, r.PolicyVersion, r.LastUpdated })
+                .ToListAsync(cancellationToken);
 
-            negotiatedMin = await negotiatedQuery.DefaultIfEmpty().MinAsync(cancellationToken);
-            negotiatedMax = await negotiatedQuery.DefaultIfEmpty().MaxAsync(cancellationToken);
+            if (negotiatedRows.Count > 0)
+            {
+                negotiatedMin = negotiatedRows.Min(r => r.Amount);
+                negotiatedMax = negotiatedRows.Max(r => r.Amount);
+                var latestNegotiatedUpdate = negotiatedRows.Max(r => r.LastUpdated);
+                if (!dataAsOfDate.HasValue || latestNegotiatedUpdate > dataAsOfDate.Value)
+                {
+                    dataAsOfDate = latestNegotiatedUpdate;
+                }
+
+                var latestPolicyVersion = negotiatedRows
+                    .OrderByDescending(r => r.LastUpdated)
+                    .Select(r => r.PolicyVersion)
+                    .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+                matchedInsurer = string.IsNullOrWhiteSpace(latestPolicyVersion)
+                    ? normalizedInsurer
+                    : $"{normalizedInsurer} ({latestPolicyVersion})";
+            }
         }
 
-        return new PricingSummary(negotiatedMin, negotiatedMax, cashMin, cashMax);
+        return new PricingSummary(
+            negotiatedMin,
+            negotiatedMax,
+            cashMin,
+            cashMax,
+            facilityIds.Count,
+            matchedInsurer,
+            dataAsOfDate);
     }
 
     public string FormatRange(decimal? minValue, decimal? maxValue)

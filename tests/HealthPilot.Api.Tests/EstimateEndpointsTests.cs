@@ -47,6 +47,9 @@ public class EstimateEndpointsTests
         Assert.Equal("$80.00 - $160.00", payload.GetProperty("cashPriceRange").GetString());
         Assert.Equal(57.50m, payload.GetProperty("insurerPaymentEstimate").GetDecimal());
         Assert.Equal("AwayFromZero", payload.GetProperty("roundingMode").GetString());
+        Assert.Equal("1 facilities matched", payload.GetProperty("matchedFacilityCount").GetString());
+        Assert.Equal("Aetna (Aetna-2026-Q1)", payload.GetProperty("matchedInsurer").GetString());
+        Assert.Equal("2026-03-01T00:00:00+00:00", payload.GetProperty("dataAsOfDate").GetString());
     }
 
     [Fact]
@@ -109,7 +112,14 @@ public class EstimateEndpointsTests
     {
         public Task<PricingSummary> GetPricingSummaryAsync(string zipCode, string insurer, string cptCode, CancellationToken cancellationToken)
         {
-            return Task.FromResult(new PricingSummary(100m, 200m, 80m, 160m));
+            return Task.FromResult(new PricingSummary(
+                100m,
+                200m,
+                80m,
+                160m,
+                MatchedFacilityCount: 1,
+                MatchedInsurer: "Aetna (Aetna-2026-Q1)",
+                DataAsOfDate: new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero)));
         }
 
         public string FormatRange(decimal? minValue, decimal? maxValue)

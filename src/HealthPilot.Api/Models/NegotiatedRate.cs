@@ -8,6 +8,9 @@ public class NegotiatedRate
 
     public decimal Rate { get; set; }
     public required string RateType { get; set; }
+    public string? PolicyVersion { get; set; }
+    public DateTimeOffset? EffectiveStartUtc { get; set; }
+    public DateTimeOffset? EffectiveEndUtc { get; set; }
     public DateTimeOffset LastUpdated { get; set; }
 
     public Procedure Procedure { get; set; } = null!;

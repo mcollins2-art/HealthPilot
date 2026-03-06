@@ -9,6 +9,9 @@ public class PricingPersistenceService(
     AppDbContext dbContext,
     ILogger<PricingPersistenceService> logger) : IPricingPersistenceService
 {
+    private const decimal MinSupportedRate = 0m;
+    private const decimal MaxSupportedRate = 100_000m;
+
     public async Task<PricingPersistenceResult> UpsertPricingDataAsync(
         IReadOnlyList<StructuredPricingRecord> records,
         CancellationToken cancellationToken)
@@ -256,7 +259,16 @@ public class PricingPersistenceService(
         Dictionary<string, int> insurerMap,
         CancellationToken cancellationToken)
     {
-        var candidateRows = new List<(int ProcedureId, int FacilityId, int InsurerId, decimal Rate, string RateType, DateTimeOffset LastUpdated)>();
+        var candidateRows = new List<(
+            int ProcedureId,
+            int FacilityId,
+            int InsurerId,
+            decimal Rate,
+            string RateType,
+            string? PolicyVersion,
+            DateTimeOffset? EffectiveStartUtc,
+            DateTimeOffset? EffectiveEndUtc,
+            DateTimeOffset LastUpdated)>();
 
         foreach (var record in records)
         {
@@ -265,20 +277,37 @@ public class PricingPersistenceService(
                 continue;
             }
 
+            if (!IsRateWithinBounds(record.NegotiatedRate.Value))
+            {
+                logger.LogWarning(
+                    "Skipping negotiated rate outside supported bounds. CPT={CptCode}, Facility={Facility}, Insurer={Insurer}, Rate={Rate}",
+                    record.CptCode,
+                    record.FacilityName,
+                    record.InsurerName,
+                    record.NegotiatedRate.Value);
+                continue;
+            }
+
             if (!procedureMap.TryGetValue(NormalizeCpt(record.CptCode), out var procedureId))
             {
+                logger.LogWarning("Skipping negotiated rate because procedure lookup failed for CPT={CptCode}", record.CptCode);
                 continue;
             }
 
             var facilityKey = BuildFacilityKey(record.FacilityName, record.City, record.State, record.ZipCode);
             if (!facilityMap.TryGetValue(facilityKey, out var facilityId))
             {
+                logger.LogWarning(
+                    "Skipping negotiated rate because facility lookup failed for Facility={Facility}, Zip={ZipCode}",
+                    record.FacilityName,
+                    record.ZipCode);
                 continue;
             }
 
             var insurerName = record.InsurerName.Trim();
             if (!insurerMap.TryGetValue(insurerName, out var insurerId))
             {
+                logger.LogWarning("Skipping negotiated rate because insurer lookup failed for Insurer={Insurer}", insurerName);
                 continue;
             }
 
@@ -288,6 +317,9 @@ public class PricingPersistenceService(
                 insurerId,
                 record.NegotiatedRate.Value,
                 string.IsNullOrWhiteSpace(record.NegotiatedRateType) ? "contracted" : record.NegotiatedRateType.Trim(),
+                record.PolicyVersion,
+                record.EffectiveStartUtc,
+                record.EffectiveEndUtc,
                 record.LastUpdated));
         }
 
@@ -298,12 +330,15 @@ public class PricingPersistenceService(
         foreach (var row in candidateRows)
         {
             await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
-                INSERT INTO negotiated_rates ("ProcedureId", "FacilityId", "InsurerId", "Rate", "RateType", "LastUpdated")
-                VALUES ({row.ProcedureId}, {row.FacilityId}, {row.InsurerId}, {row.Rate}, {row.RateType}, {row.LastUpdated})
+                INSERT INTO negotiated_rates ("ProcedureId", "FacilityId", "InsurerId", "Rate", "RateType", "PolicyVersion", "EffectiveStartUtc", "EffectiveEndUtc", "LastUpdated")
+                VALUES ({row.ProcedureId}, {row.FacilityId}, {row.InsurerId}, {row.Rate}, {row.RateType}, {row.PolicyVersion}, {row.EffectiveStartUtc}, {row.EffectiveEndUtc}, {row.LastUpdated})
                 ON CONFLICT ("ProcedureId", "FacilityId", "InsurerId")
                 DO UPDATE SET
                     "Rate" = EXCLUDED."Rate",
                     "RateType" = EXCLUDED."RateType",
+                    "PolicyVersion" = EXCLUDED."PolicyVersion",
+                    "EffectiveStartUtc" = EXCLUDED."EffectiveStartUtc",
+                    "EffectiveEndUtc" = EXCLUDED."EffectiveEndUtc",
                     "LastUpdated" = EXCLUDED."LastUpdated";
                 """, cancellationToken);
         }
@@ -326,14 +361,29 @@ public class PricingPersistenceService(
                 continue;
             }
 
+            if (!IsRateWithinBounds(record.CashPrice.Value))
+            {
+                logger.LogWarning(
+                    "Skipping cash price outside supported bounds. CPT={CptCode}, Facility={Facility}, CashPrice={CashPrice}",
+                    record.CptCode,
+                    record.FacilityName,
+                    record.CashPrice.Value);
+                continue;
+            }
+
             if (!procedureMap.TryGetValue(NormalizeCpt(record.CptCode), out var procedureId))
             {
+                logger.LogWarning("Skipping cash price because procedure lookup failed for CPT={CptCode}", record.CptCode);
                 continue;
             }
 
             var facilityKey = BuildFacilityKey(record.FacilityName, record.City, record.State, record.ZipCode);
             if (!facilityMap.TryGetValue(facilityKey, out var facilityId))
             {
+                logger.LogWarning(
+                    "Skipping cash price because facility lookup failed for Facility={Facility}, Zip={ZipCode}",
+                    record.FacilityName,
+                    record.ZipCode);
                 continue;
             }
 
@@ -360,6 +410,8 @@ public class PricingPersistenceService(
     }
 
     private static string NormalizeCpt(string cptCode) => cptCode.Trim().ToUpperInvariant();
+
+    private static bool IsRateWithinBounds(decimal rate) => rate > MinSupportedRate && rate < MaxSupportedRate;
 
     private static string BuildFacilityKey(string name, string city, string state, string zip)
     {
