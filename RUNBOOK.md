@@ -2,7 +2,6 @@
 
 ## 1) Start service locally
 ```powershell
-cd backend
 dotnet restore
 dotnet ef database update --project .\src\HealthPilot.Api\HealthPilot.Api.csproj --startup-project .\src\HealthPilot.Api\HealthPilot.Api.csproj
 $env:ASPNETCORE_ENVIRONMENT = "Development"
@@ -31,6 +30,13 @@ $body = @{
 } | ConvertTo-Json
 
 Invoke-RestMethod -Uri "http://localhost:5000/estimate" -Method Post -Headers $headers -ContentType "application/json" -Body $body
+```
+
+### 3.1b Procedure/provider catalog
+```powershell
+$headers = @{ "X-API-Key" = "<estimate-key>" }
+Invoke-RestMethod -Uri "http://localhost:5000/procedures?search=705&limit=20" -Headers $headers
+Invoke-RestMethod -Uri "http://localhost:5000/providers?zipCode=10001&limit=20" -Headers $headers
 ```
 
 ### 3.2 Ingestion import
@@ -67,19 +73,16 @@ Required scopes:
 ## 5) Validation commands
 ### Unit tests
 ```powershell
-cd backend
 dotnet test .\tests\HealthPilot.Api.Tests\HealthPilot.Api.Tests.csproj
 ```
 
 ### Focused security/ingestion regressions
 ```powershell
-cd backend
 dotnet test .\tests\HealthPilot.Api.Tests\HealthPilot.Api.Tests.csproj --filter "FullyQualifiedName~(ApiKeyAuthenticationMiddlewareTests|IngestionImportEndpointsTests|IngestionCheckpointEndpointsTests|PricingIngestionPipelineTests)"
 ```
 
 ### Perf smoke
 ```powershell
-cd backend
 .\scripts\loadtest\Run-EstimatePerfSmoke.ps1 -BaseUrl "http://localhost:5000" -TotalRequests 500 -Concurrency 50 -OutFile ".\scripts\loadtest\last-estimate-perf.json"
 ```
 
@@ -91,8 +94,13 @@ For cold-start-safe smoke runs, add warm-up requests:
 
 ### Staging migration rehearsal
 ```powershell
-cd backend
 .\scripts\Test-MigrationStaging.ps1
+```
+
+## 7) Data download + container deployment
+```bash
+python scripts/data/download_transparency_data.py --url "https://example.org/hospital-mrf.json" --out-dir data/raw
+docker compose up --build
 ```
 
 ## 6) Security checklist (pilot)
