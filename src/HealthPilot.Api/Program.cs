@@ -1,6 +1,7 @@
 using HealthPilot.Api.Data;
 using HealthPilot.Api.Endpoints;
 using HealthPilot.Api.Ingestion;
+using HealthPilot.Api.Ingestion.Policies;
 using HealthPilot.Api.Middleware;
 using HealthPilot.Api.Services;
 using Microsoft.AspNetCore.RateLimiting;
@@ -31,6 +32,16 @@ builder.Services.AddScoped<IBenefitSimulationService, BenefitSimulationService>(
 builder.Services.AddScoped<IEstimateAuditService, EstimateAuditService>();
 builder.Services.AddScoped<IPricingPersistenceService, PricingPersistenceService>();
 builder.Services.AddScoped<IPricingLifecycleService, PricingLifecycleService>();
+builder.Services.AddScoped<IAuthorizationPolicyService, AuthorizationPolicyService>();
+builder.Services.AddScoped<IAuthorizationRuleEvaluator, AuthorizationRuleEvaluator>();
+builder.Services.AddScoped<IAuthorizationProbabilityModel, AuthorizationProbabilityModel>();
+builder.Services.AddScoped<IAuthorizationDecisionService, AuthorizationDecisionService>();
+builder.Services.AddScoped<IPolicyDocumentParser, PolicyDocumentParser>();
+builder.Services.AddScoped<IPolicyRuleExtractor, PolicyRuleExtractor>();
+builder.Services.AddScoped<IPolicyNormalizer, PolicyNormalizer>();
+builder.Services.AddScoped<IPolicyPersistenceService, PolicyPersistenceService>();
+builder.Services.AddScoped<PolicyIngestionPipeline>();
+builder.Services.AddHttpClient<IPolicySourceFetcher, PolicySourceFetcher>();
 builder.Services.AddScoped<PricingIngestionPipeline>();
 builder.Services.AddScoped<IIngestionCheckpointService, DbIngestionCheckpointService>();
 builder.Services.AddSingleton<IIngestionJobQueue, IngestionJobQueue>();
@@ -72,6 +83,7 @@ if (app.Environment.IsDevelopment())
 // Endpoint definitions are split to keep Program.cs clean and scalable.
 app.MapHealthEndpoints();
 app.MapEstimateEndpoints();
+app.MapAuthorizationEndpoints();
 app.MapIngestionEndpoints();
 
 app.Run();

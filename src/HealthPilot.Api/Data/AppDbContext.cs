@@ -13,6 +13,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<EstimateAuditLog> EstimateAuditLogs => Set<EstimateAuditLog>();
     public DbSet<IngestionCheckpoint> IngestionCheckpoints => Set<IngestionCheckpoint>();
     public DbSet<IngestionJob> IngestionJobs => Set<IngestionJob>();
+    public DbSet<InsurerMedicalPolicy> InsurerMedicalPolicies => Set<InsurerMedicalPolicy>();
+    public DbSet<PolicyVersion> PolicyVersions => Set<PolicyVersion>();
+    public DbSet<PolicyRule> PolicyRules => Set<PolicyRule>();
+    public DbSet<PolicyProcedureMapping> PolicyProcedureMappings => Set<PolicyProcedureMapping>();
+    public DbSet<DiagnosisProcedureMapping> DiagnosisProcedureMappings => Set<DiagnosisProcedureMapping>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -152,6 +157,81 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(x => x.CreatedAtUtc);
             entity.HasIndex(x => x.ReplayOfJobId);
             entity.HasIndex(x => x.FileHashSha256);
+        });
+
+        modelBuilder.Entity<InsurerMedicalPolicy>(entity =>
+        {
+            entity.ToTable("insurer_medical_policies");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.PolicyName).HasMaxLength(255).IsRequired();
+            entity.Property(x => x.SourceUrl).HasMaxLength(2048).IsRequired();
+            entity.HasIndex(x => new { x.InsurerId, x.PolicyName }).IsUnique();
+
+            entity.HasOne(x => x.Insurer)
+                .WithMany(x => x.MedicalPolicies)
+                .HasForeignKey(x => x.InsurerId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PolicyVersion>(entity =>
+        {
+            entity.ToTable("policy_versions");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.RawDocumentPath).HasMaxLength(2048).IsRequired();
+            entity.HasIndex(x => new { x.PolicyId, x.VersionDate }).IsUnique();
+            entity.HasIndex(x => x.EffectiveDate);
+
+            entity.HasOne(x => x.Policy)
+                .WithMany(x => x.Versions)
+                .HasForeignKey(x => x.PolicyId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PolicyRule>(entity =>
+        {
+            entity.ToTable("policy_rules");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.RuleType).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Description).HasMaxLength(2048).IsRequired();
+            entity.Property(x => x.ProcedureCptCode).HasMaxLength(10);
+            entity.Property(x => x.ConditionExpression).HasMaxLength(1024);
+            entity.Property(x => x.DenialReason).HasMaxLength(512);
+            entity.HasIndex(x => new { x.PolicyVersionId, x.Priority });
+            entity.HasIndex(x => x.ProcedureCptCode);
+
+            entity.HasOne(x => x.PolicyVersion)
+                .WithMany(x => x.Rules)
+                .HasForeignKey(x => x.PolicyVersionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PolicyProcedureMapping>(entity =>
+        {
+            entity.ToTable("policy_procedure_mappings");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.PolicyVersionId, x.ProcedureId }).IsUnique();
+            entity.HasIndex(x => x.ProcedureId);
+
+            entity.HasOne(x => x.PolicyVersion)
+                .WithMany(x => x.ProcedureMappings)
+                .HasForeignKey(x => x.PolicyVersionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.Procedure)
+                .WithMany(x => x.PolicyProcedureMappings)
+                .HasForeignKey(x => x.ProcedureId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DiagnosisProcedureMapping>(entity =>
+        {
+            entity.ToTable("diagnosis_procedure_mappings");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Icd10Code).HasMaxLength(12).IsRequired();
+            entity.Property(x => x.CptCode).HasMaxLength(10).IsRequired();
+            entity.Property(x => x.RelevanceScore).HasPrecision(5, 2);
+            entity.HasIndex(x => new { x.Icd10Code, x.CptCode }).IsUnique();
+            entity.HasIndex(x => x.RelevanceScore);
         });
     }
 }
