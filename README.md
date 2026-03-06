@@ -72,6 +72,8 @@ cd backend
 
 - API reference: `API_DOCUMENTATION.md`
 - Runbook: `RUNBOOK.md`
+- Phased roadmap: `PHASED_EXECUTION_PLAN.md`
+- Phase 2 commercial readiness audit: `PHASE_2_COMMERCIAL_READINESS.md`
 
 ## Structure
 
