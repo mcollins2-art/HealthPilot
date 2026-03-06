@@ -80,9 +80,9 @@ public sealed class IngestionJobWorker(
         }
         catch (Exception ex)
         {
-            var correlationId = Activity.Current?.Id ?? $"job-{job.Id}-attempt-{job.AttemptCount + 1}";
-            logger.LogWarning(ex, "Ingestion job processing failed for job {JobId}, correlationId={CorrelationId}", job.Id, correlationId);
             job.AttemptCount += 1;
+            var correlationId = Activity.Current?.Id ?? $"job-{job.Id}-attempt-{job.AttemptCount}";
+            logger.LogWarning(ex, "Ingestion job processing failed for job {JobId}, correlationId={CorrelationId}", job.Id, correlationId);
             job.ErrorMessage = IngestionErrorFormatter.BuildBoundedErrorMessage(ex, correlationId);
             job.UpdatedAtUtc = DateTimeOffset.UtcNow;
 
