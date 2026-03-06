@@ -1,5 +1,6 @@
 using HealthPilot.Api.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
 namespace HealthPilot.Api.Ingestion;
@@ -12,6 +13,11 @@ public sealed class IngestionJobWorker(
     private static readonly Meter Meter = new("HealthPilot.Ingestion");
     private static readonly Counter<long> JobsCompletedCounter = Meter.CreateCounter<long>("ingestion_jobs_completed");
     private static readonly Counter<long> JobsDeadLetteredCounter = Meter.CreateCounter<long>("ingestion_jobs_dead_lettered");
+    private static readonly Histogram<double> JobQueueLagSecondsHistogram = Meter.CreateHistogram<double>("ingestion_job_queue_lag_seconds");
+    private static readonly Histogram<double> JobDurationSecondsHistogram = Meter.CreateHistogram<double>("ingestion_job_duration_seconds");
+    private readonly ObservableGauge<long> _queueDepthGauge = Meter.CreateObservableGauge(
+        "ingestion_jobs_queue_depth",
+        () => queue.PendingCount);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -40,6 +46,7 @@ public sealed class IngestionJobWorker(
 
     private async Task ProcessJobAsync(long jobId, CancellationToken cancellationToken)
     {
+        var jobDuration = Stopwatch.StartNew();
         await using var scope = scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var pipeline = scope.ServiceProvider.GetRequiredService<PricingIngestionPipeline>();
@@ -53,6 +60,12 @@ public sealed class IngestionJobWorker(
         if (job.Status is "completed" or "dead_lettered")
         {
             return;
+        }
+
+        var queueLag = (DateTimeOffset.UtcNow - job.CreatedAtUtc).TotalSeconds;
+        if (queueLag >= 0)
+        {
+            JobQueueLagSecondsHistogram.Record(queueLag);
         }
 
         job.Status = "in_progress";
@@ -80,7 +93,9 @@ public sealed class IngestionJobWorker(
         catch (Exception ex)
         {
             job.AttemptCount += 1;
-            job.ErrorMessage = ex.Message;
+            var correlationId = Activity.Current?.Id ?? $"job-{job.Id}-attempt-{job.AttemptCount}";
+            logger.LogWarning(ex, "Ingestion job processing failed for job {JobId}, correlationId={CorrelationId}", job.Id, correlationId);
+            job.ErrorMessage = IngestionErrorFormatter.BuildBoundedErrorMessage(ex, correlationId);
             job.UpdatedAtUtc = DateTimeOffset.UtcNow;
 
             if (job.AttemptCount >= job.MaxAttempts)
@@ -95,6 +110,10 @@ public sealed class IngestionJobWorker(
             }
 
             await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        finally
+        {
+            JobDurationSecondsHistogram.Record(jobDuration.Elapsed.TotalSeconds);
         }
     }
 }

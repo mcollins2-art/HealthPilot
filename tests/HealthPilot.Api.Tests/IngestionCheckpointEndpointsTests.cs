@@ -28,6 +28,7 @@ public class IngestionCheckpointEndpointsTests : IAsyncLifetime
 
         _factory = new CheckpointWebFactory(_checkpointDirectory);
         _client = _factory.CreateClient();
+        _client.DefaultRequestHeaders.Add("X-API-Key", "ingestion-key");
 
         return Task.CompletedTask;
     }
@@ -88,6 +89,21 @@ public class IngestionCheckpointEndpointsTests : IAsyncLifetime
         Assert.Equal(2, items.Count);
         Assert.Equal(keyC, items[0].GetProperty("checkpointKey").GetString());
         Assert.Equal(keyB, items[1].GetProperty("checkpointKey").GetString());
+    }
+
+    [Fact]
+    public async Task ListCheckpoints_DoesNotDeleteExpiredRecords_AsSideEffect()
+    {
+        var oldKey = await CreateCheckpointAsync("C:\\data\\list-sideeffect-old.json", 1000, 5, completed: true);
+        var configuredRetention = TimeSpan.FromHours(168);
+        await SetCheckpointUpdatedAtAsync(oldKey, DateTimeOffset.UtcNow - configuredRetention - TimeSpan.FromHours(1));
+
+        var response = await _client.GetAsync("/ingestion/checkpoints?limit=10");
+
+        response.EnsureSuccessStatusCode();
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var keys = payload.GetProperty("items").EnumerateArray().Select(x => x.GetProperty("checkpointKey").GetString()).ToList();
+        Assert.Contains(oldKey, keys);
     }
 
     [Fact]
@@ -247,7 +263,10 @@ public class IngestionCheckpointEndpointsTests : IAsyncLifetime
                 var settings = new Dictionary<string, string?>
                 {
                     ["Ingestion:CheckpointDirectory"] = checkpointDirectory,
-                    ["Ingestion:CheckpointRetentionHours"] = "168"
+                    ["Ingestion:CheckpointRetentionHours"] = "168",
+                    ["Security:ApiKeys:0:Name"] = "ingestion-client",
+                    ["Security:ApiKeys:0:Key"] = "ingestion-key",
+                    ["Security:ApiKeys:0:Scopes:0"] = "ingestion:write"
                 };
 
                 if (extraConfig is not null)

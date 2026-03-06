@@ -11,4 +11,7 @@ public class EstimateResponse
     public required string CashPriceRange { get; set; }
     public decimal InsurerPaymentEstimate { get; set; }
     public required string RoundingMode { get; set; }
+    public required string MatchedFacilityCount { get; set; }
+    public required string MatchedInsurer { get; set; }
+    public DateTimeOffset? DataAsOfDate { get; set; }
 }

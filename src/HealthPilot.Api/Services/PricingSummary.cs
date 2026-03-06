@@ -4,5 +4,8 @@ public record PricingSummary(
     decimal? NegotiatedMin,
     decimal? NegotiatedMax,
     decimal? CashMin,
-    decimal? CashMax
+    decimal? CashMax,
+    int MatchedFacilityCount = 0,
+    string? MatchedInsurer = null,
+    DateTimeOffset? DataAsOfDate = null
 );

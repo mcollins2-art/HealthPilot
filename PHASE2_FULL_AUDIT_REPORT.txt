@@ -1,0 +1,317 @@
+HealthPilot Phase 2 Full Audit Scan
+Generated: 2026-03-06T16:11:35.403Z
+Repository: /home/runner/work/HealthPilot/HealthPilot
+Branch: copilot/add-data-pipeline-structure
+
+====================================================================
+1) EXECUTIVE SUMMARY
+====================================================================
+This audit focused on Phase 2 style implementations in the repository, especially ingestion control plane, async job orchestration, checkpointing, lifecycle cleanup, and API key scope/tenant enforcement.
+
+Overall posture:
+- Build and tests currently pass.
+- Core Phase 2 features are present and mostly functional.
+- Main concerns are around durability, multi-tenant access boundaries in job read/replay paths, destructive cleanup safeguards, and operational readiness.
+
+Top priorities:
+1. Enforce tenant filtering on ingestion job read/replay endpoints.
+2. Add durable async queue behavior (or durable recovery sweep) for queued jobs after restarts.
+3. Add safety controls for destructive pricing cleanup endpoint.
+4. Add missing negative-path tests around replay and pricing cleanup.
+
+====================================================================
+2) AUDIT METHOD & EVIDENCE
+====================================================================
+Commands executed:
+- dotnet build HealthPilot.sln
+- dotnet test tests/HealthPilot.Api.Tests/HealthPilot.Api.Tests.csproj
+
+Results:
+- Build: succeeded (0 errors)
+- Tests: passed (222 passed, 0 failed)
+
+Files reviewed in depth:
+- src/HealthPilot.Api/Endpoints/IngestionEndpoints.cs
+- src/HealthPilot.Api/Ingestion/IngestionJobQueue.cs
+- src/HealthPilot.Api/Ingestion/IngestionJobWorker.cs
+- src/HealthPilot.Api/Ingestion/DbIngestionCheckpointService.cs
+- src/HealthPilot.Api/Services/PricingLifecycleService.cs
+- src/HealthPilot.Api/Middleware/ApiKeyAuthenticationMiddleware.cs
+- src/HealthPilot.Api/Models/IngestionJob.cs
+- tests/HealthPilot.Api.Tests/IngestionImportEndpointsTests.cs
+- tests/HealthPilot.Api.Tests/IngestionCheckpointEndpointsTests.cs
+- RUNBOOK.md
+- API_DOCUMENTATION.md
+
+====================================================================
+3) PHASE 2 IMPLEMENTATION INVENTORY
+====================================================================
+A. Ingestion control-plane endpoints
+- /ingestion/import
+- /ingestion/checkpoints/{checkpointKey}
+- /ingestion/checkpoints
+- /ingestion/checkpoints/cleanup
+- /ingestion/jobs/{jobId}
+- /ingestion/jobs/{jobId}/replay
+- /ingestion/pricing/cleanup
+Evidence: src/HealthPilot.Api/Endpoints/IngestionEndpoints.cs:17-64
+
+B. Async job queue + worker
+- In-memory queue: Channel<long> unbounded
+  Evidence: src/HealthPilot.Api/Ingestion/IngestionJobQueue.cs:5-17
+- Background worker with retries/dead-letter transitions
+  Evidence: src/HealthPilot.Api/Ingestion/IngestionJobWorker.cs:41-99
+
+C. Checkpointing
+- DB-backed checkpoint service with retention cleanup
+  Evidence: src/HealthPilot.Api/Ingestion/DbIngestionCheckpointService.cs:53-90
+
+D. Lifecycle cleanup
+- Bulk stale pricing deletes via ExecuteDeleteAsync
+  Evidence: src/HealthPilot.Api/Services/PricingLifecycleService.cs:8-18
+
+E. Scoped auth + tenant header enforcement
+- Scope requirement lookup + tenant header checks in middleware
+  Evidence: src/HealthPilot.Api/Middleware/ApiKeyAuthenticationMiddleware.cs:62-99
+
+====================================================================
+4) FINDINGS (ISSUES / AREAS OF CONCERN)
+====================================================================
+
+[HIGH] F-001: Potential cross-tenant job metadata exposure (job status endpoint)
+Risk:
+- Job status fetch does not enforce tenant boundary at query time.
+- Caller with valid ingestion scope can query by numeric job id; endpoint does not compare request tenant to job.TenantId.
+Evidence:
+- TenantId is captured when creating jobs:
+  src/HealthPilot.Api/Endpoints/IngestionEndpoints.cs:241
+- Status query does not filter by tenant:
+  src/HealthPilot.Api/Endpoints/IngestionEndpoints.cs:323-332
+- Tenant is stored in middleware context when provided:
+  src/HealthPilot.Api/Middleware/ApiKeyAuthenticationMiddleware.cs:95-98
+Impact:
+- In multi-tenant deployments, tenant A may learn existence/state/provenance of tenant B jobs if ID is known/guessed.
+Recommendation:
+- Require tenant header for ingestion job operations in tenant-restricted mode.
+- Filter queries by TenantId and return 404 for mismatches.
+
+[HIGH] F-002: Replay endpoint lacks tenant authorization check
+Risk:
+- Replay uses sourceJob by id only and clones TenantId from source job, but does not verify caller tenant matches source job tenant.
+Evidence:
+- Replay fetch by id only:
+  src/HealthPilot.Api/Endpoints/IngestionEndpoints.cs:340-344
+- Replay job copies source tenant:
+  src/HealthPilot.Api/Endpoints/IngestionEndpoints.cs:360
+Impact:
+- Potential cross-tenant replay triggering if ids are discoverable.
+Recommendation:
+- Apply same tenant filter/validation as status endpoint.
+
+[HIGH] F-003: In-memory queue can lose queued jobs on process crash/restart
+Risk:
+- Queue is unbounded in-memory channel only; queued items not persisted in queue medium.
+Evidence:
+- Channel.CreateUnbounded<long>()
+  src/HealthPilot.Api/Ingestion/IngestionJobQueue.cs:7
+- Worker depends on queue dequeue loop:
+  src/HealthPilot.Api/Ingestion/IngestionJobWorker.cs:18-24
+Impact:
+- Jobs that are persisted as status="queued" but not yet dequeued can be orphaned after restart.
+Recommendation:
+- Add startup recovery sweep to enqueue persisted queued jobs.
+- Consider durable broker-backed queue for production.
+
+[MEDIUM] F-004: Destructive pricing cleanup endpoint has no dry-run/preview safety
+Risk:
+- Cleanup endpoint immediately issues deletions by retention age.
+Evidence:
+- Endpoint invokes service directly:
+  src/HealthPilot.Api/Endpoints/IngestionEndpoints.cs:393-400
+- Service uses ExecuteDeleteAsync on negotiated and cash tables:
+  src/HealthPilot.Api/Services/PricingLifecycleService.cs:12-17
+Impact:
+- Operator error in retentionDays can cause broad data deletion.
+Recommendation:
+- Add dryRun=true preview returning counts before delete.
+- Add optional confirmation token or role gate.
+
+[MEDIUM] F-005: Retry policy hardcoded at model default
+Risk:
+- MaxAttempts defaults to 2 in model with no clear configuration override at job creation.
+Evidence:
+- src/HealthPilot.Api/Models/IngestionJob.cs:17
+Impact:
+- Limited flexibility; may be too strict/too lenient per environment.
+Recommendation:
+- Make max attempts configuration-driven and persist chosen policy per job.
+
+[MEDIUM] F-006: Retention cleanup side effect in checkpoint list operation
+Risk:
+- Listing checkpoints triggers deletion of expired checkpoints as side effect.
+Evidence:
+- ListRecentAsync() calls CleanupExpiredAsync() first:
+  src/HealthPilot.Api/Ingestion/DbIngestionCheckpointService.cs:53-61
+Impact:
+- Read call modifies state unexpectedly; can surprise operators and complicate auditability.
+Recommendation:
+- Move cleanup to explicit endpoint and/or scheduled background maintenance.
+- Keep list endpoint read-only.
+
+[MEDIUM] F-007: Error detail persistence may truncate diagnostically useful context
+Risk:
+- Worker stores only ex.Message to job.ErrorMessage; stack/inner details not persisted.
+Evidence:
+- src/HealthPilot.Api/Ingestion/IngestionJobWorker.cs:83-84
+Impact:
+- Harder postmortem in environments where full logs are not retained.
+Recommendation:
+- Persist bounded structured error code/category + correlation id.
+
+[LOW] F-008: Queue depth/worker lag observability not exposed
+Risk:
+- Counters exist for completed/dead-letter events, but no queue depth/age metric surfaced.
+Evidence:
+- Counters only:
+  src/HealthPilot.Api/Ingestion/IngestionJobWorker.cs:12-15
+Impact:
+- Difficult to detect ingestion backlog and SLO drift early.
+Recommendation:
+- Add gauge/histograms: queue length, dequeue latency, processing duration.
+
+[LOW] F-009: Legacy API key grants broad scopes by default
+Risk:
+- Legacy single key path grants both estimate and ingestion write scopes.
+Evidence:
+- src/HealthPilot.Api/Middleware/ApiKeyAuthenticationMiddleware.cs:105-113
+Impact:
+- Over-privilege if legacy key mode used in production.
+Recommendation:
+- Encourage scoped keys only in production; optionally disable legacy mode via config.
+
+[LOW] F-010: API docs/runbook lack explicit operational playbooks for dead-letter handling
+Risk:
+- Operational docs do not define dead-letter triage/replay workflows.
+Evidence:
+- RUNBOOK.md reviewed; no dead-letter playbook section.
+- API doc lists replay endpoint but no incident flow:
+  API_DOCUMENTATION.md:181-191
+Impact:
+- Slower MTTR during ingestion failures.
+Recommendation:
+- Add runbook section for queued->dead_lettered lifecycle and replay strategy.
+
+====================================================================
+5) TEST COVERAGE AUDIT (PHASE 2)
+====================================================================
+Existing coverage observed:
+- Checkpoint endpoint cleanup path covered:
+  tests/HealthPilot.Api.Tests/IngestionCheckpointEndpointsTests.cs:96-105
+- Replay happy path covered:
+  tests/HealthPilot.Api.Tests/IngestionImportEndpointsTests.cs:220-245
+
+Gaps identified:
+
+[TG-001] Missing replay non-existent job test
+- No explicit test that POST /ingestion/jobs/{jobId}/replay returns 404 when job missing.
+- Existing replay test only verifies accepted path.
+Evidence:
+- tests/HealthPilot.Api.Tests/IngestionImportEndpointsTests.cs:220-245
+
+[TG-002] Missing pricing cleanup endpoint tests
+- No direct tests found covering /ingestion/pricing/cleanup endpoint behavior.
+Evidence:
+- Search in tests indicates no pricing cleanup endpoint test entries.
+
+[TG-003] Missing tenant isolation tests for job status/replay
+- Tenant behavior tested at middleware level, but endpoint-level tenant isolation for ingestion jobs not covered.
+Evidence:
+- Middleware tenant tests exist:
+  tests/HealthPilot.Api.Tests/ApiKeyAuthenticationMiddlewareTests.cs:211-250
+- Job status/replay endpoint tests do not assert tenant filtering behavior.
+
+[TG-004] Missing worker lifecycle tests for retry/dead-letter transitions
+- No focused worker unit tests validating attempt increments and dead-letter thresholds.
+Evidence:
+- No dedicated IngestionJobWorkerTests file found.
+
+====================================================================
+6) OPERATIONAL READINESS CONCERNS
+====================================================================
+OR-001: Startup recovery not documented for queued jobs
+- Concern: queued jobs may remain in DB but not in runtime queue after restart.
+- Need: startup sweep and runbook procedure.
+
+OR-002: Cleanup endpoint should be treated as privileged maintenance action
+- Concern: single API call can permanently delete stale price rows.
+- Need: stronger controls + dry-run + audit trails.
+
+OR-003: Retention defaults require environment-specific governance
+- Checkpoint retention default uses 168 hours; pricing cleanup default 365 days.
+- Need: explicit production policy documentation and monitoring.
+
+====================================================================
+7) ADDITIONAL OBSERVATION (PHASE DRIFT CHECK)
+====================================================================
+The repository does not currently include an outpatient surgery endpoint implementation file.
+- No outpatient/surgery endpoint source files found under src/HealthPilot.Api.
+Implication:
+- If outpatient surgery is expected as a Phase 2 deliverable, implementation appears absent or moved outside this repo.
+
+====================================================================
+8) PRIORITIZED REMEDIATION PLAN
+====================================================================
+P0 (Immediate)
+1. Enforce tenant scoping in GET /ingestion/jobs/{jobId} and POST /ingestion/jobs/{jobId}/replay.
+2. Add tests for tenant mismatch and non-existent replay.
+
+P1 (Near-term)
+3. Add durable queued-job recovery at startup (rehydrate queued jobs from DB).
+4. Add pricing cleanup dry-run + explicit confirmation mode.
+5. Add dedicated worker tests (retry/dead-letter transitions).
+
+P2 (Stability)
+6. Move checkpoint cleanup side effect out of list call.
+7. Improve observability metrics (queue depth, latency).
+8. Expand runbook with dead-letter triage and replay procedures.
+
+====================================================================
+9) CLOSING NOTE
+====================================================================
+This audit identifies high-impact concerns primarily in multi-tenant boundary enforcement and asynchronous job durability. The system is functionally healthy (build/tests green) but requires these hardening steps to be production-grade under Phase 2 operational load and tenancy requirements.
+
+====================================================================
+10) PRE-PHASE 2 GATE RISKS (NEW)
+====================================================================
+[PG-001] No compliance review
+- Severity: High
+- Blocker: YES
+- Mitigation: Get legal sign-off before touching hospital data.
+
+[PG-002] Hospital file format diversity
+- Severity: Medium
+- Blocker: NO
+- Mitigation: Add 2-3 parsers for common hospital formats.
+
+[PG-003] No pricing accuracy validation
+- Severity: Medium
+- Blocker: NO
+- Mitigation: Build a Phase 1.5 comparison tool for pricing validation.
+
+====================================================================
+11) ADDITIONAL BLOCKERS
+====================================================================
+[BL-001] Claims data infrastructure missing
+- Severity: High
+- Blocker: YES
+- Mitigation: Build schema + ingestion for claims before Phase 2.
+
+[BL-002] Denial modeling not scoped
+- Severity: Medium
+- Blocker: NO
+- Mitigation: Define denial-model features + data requirements in Q2.
+
+[BL-003] Specialty drugs are a new domain
+- Severity: Medium
+- Blocker: NO
+- Mitigation: Create a separate pricing model (specialty Rx is distinct from facility pricing).

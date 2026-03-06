@@ -57,8 +57,6 @@ public class DbIngestionCheckpointService(
             return [];
         }
 
-        await CleanupExpiredAsync(cancellationToken);
-
         return await dbContext.IngestionCheckpoints
             .OrderByDescending(x => x.UpdatedAtUtc)
             .Take(limit)

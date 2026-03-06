@@ -5,6 +5,21 @@ namespace HealthPilot.Api.Services;
 
 public class PricingLifecycleService(AppDbContext dbContext) : IPricingLifecycleService
 {
+    public async Task<(int NegotiatedRatesCount, int CashPricesCount)> GetStalePricingCountsAsync(TimeSpan retention, CancellationToken cancellationToken)
+    {
+        var retentionSafe = retention <= TimeSpan.Zero ? TimeSpan.FromDays(365) : retention;
+        var cutoff = DateTimeOffset.UtcNow - retentionSafe;
+
+        var negotiatedCount = await dbContext.NegotiatedRates
+            .Where(x => x.LastUpdated < cutoff)
+            .CountAsync(cancellationToken);
+        var cashCount = await dbContext.CashPrices
+            .Where(x => x.LastUpdated < cutoff)
+            .CountAsync(cancellationToken);
+
+        return (negotiatedCount, cashCount);
+    }
+
     public async Task<(int NegotiatedRatesDeleted, int CashPricesDeleted)> CleanupStalePricingAsync(TimeSpan retention, CancellationToken cancellationToken)
     {
         var retentionSafe = retention <= TimeSpan.Zero ? TimeSpan.FromDays(365) : retention;

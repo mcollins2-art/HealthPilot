@@ -12,6 +12,9 @@ namespace HealthPilot.Api.Endpoints;
 
 public static class IngestionEndpoints
 {
+    private const int DefaultMaxAttempts = 2;
+    private const int MinMaxAttempts = 1;
+
     public static IEndpointRouteBuilder MapIngestionEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapPost("/ingestion/import", HandleImportAsync)
@@ -222,6 +225,7 @@ public static class IngestionEndpoints
         try
         {
             var batchSize = request.BatchSize ?? configuration.GetValue<int?>("Ingestion:BatchSize") ?? 5000;
+            var maxAttempts = Math.Max(configuration.GetValue<int?>("Ingestion:MaxAttempts") ?? DefaultMaxAttempts, MinMaxAttempts);
             var parserVersion = extension == ".csv" ? "cms_csv_v1" : "cms_json_v1";
             var hash = await ComputeFileHashAsync(fullPath, cancellationToken);
 
@@ -236,6 +240,7 @@ public static class IngestionEndpoints
                 SourceSystem = request.SourceSystem,
                 FileHashSha256 = hash,
                 ParserVersion = parserVersion,
+                MaxAttempts = maxAttempts,
                 EffectiveStartUtc = request.EffectiveStartUtc,
                 EffectiveEndUtc = request.EffectiveEndUtc,
                 TenantId = httpContext.Items.TryGetValue("TenantId", out var tenantId) ? tenantId?.ToString() : null
@@ -307,7 +312,7 @@ public static class IngestionEndpoints
             {
                 job.Status = "dead_lettered";
                 job.AttemptCount += 1;
-                job.ErrorMessage = ex.Message;
+                job.ErrorMessage = IngestionErrorFormatter.BuildBoundedErrorMessage(ex, httpContext.TraceIdentifier);
                 job.UpdatedAtUtc = DateTimeOffset.UtcNow;
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
@@ -323,11 +328,18 @@ public static class IngestionEndpoints
     private static async Task<IResult> HandleJobStatusAsync(
         long jobId,
         AppDbContext dbContext,
+        HttpContext httpContext,
         CancellationToken cancellationToken)
     {
+        var requestTenant = httpContext.Items.TryGetValue("TenantId", out var tenantId)
+            ? tenantId?.ToString()
+            : null;
+
         var job = await dbContext.IngestionJobs
             .AsNoTracking()
-            .SingleOrDefaultAsync(x => x.Id == jobId, cancellationToken);
+            .SingleOrDefaultAsync(
+                x => x.Id == jobId && (requestTenant == null || x.TenantId == requestTenant),
+                cancellationToken);
         return job is null ? Results.NotFound() : Results.Ok(job);
     }
 
@@ -335,9 +347,16 @@ public static class IngestionEndpoints
         long jobId,
         AppDbContext dbContext,
         IIngestionJobQueue jobQueue,
+        HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var sourceJob = await dbContext.IngestionJobs.SingleOrDefaultAsync(x => x.Id == jobId, cancellationToken);
+        var requestTenant = httpContext.Items.TryGetValue("TenantId", out var tenantId)
+            ? tenantId?.ToString()
+            : null;
+
+        var sourceJob = await dbContext.IngestionJobs.SingleOrDefaultAsync(
+            x => x.Id == jobId && (requestTenant == null || x.TenantId == requestTenant),
+            cancellationToken);
         if (sourceJob is null)
         {
             return Results.NotFound();
@@ -355,6 +374,7 @@ public static class IngestionEndpoints
             SourceSystem = sourceJob.SourceSystem,
             FileHashSha256 = sourceJob.FileHashSha256,
             ParserVersion = sourceJob.ParserVersion,
+            MaxAttempts = sourceJob.MaxAttempts,
             EffectiveStartUtc = sourceJob.EffectiveStartUtc,
             EffectiveEndUtc = sourceJob.EffectiveEndUtc,
             TenantId = sourceJob.TenantId
@@ -374,6 +394,8 @@ public static class IngestionEndpoints
 
     private static async Task<IResult> HandlePricingCleanupAsync(
         [FromQuery] int? retentionDays,
+        [FromQuery] bool? dryRun,
+        [FromQuery] bool? confirm,
         IPricingLifecycleService pricingLifecycleService,
         HttpContext httpContext,
         CancellationToken cancellationToken)
@@ -390,11 +412,41 @@ public static class IngestionEndpoints
             });
         }
 
-        var deleted = await pricingLifecycleService.CleanupStalePricingAsync(TimeSpan.FromDays(days), cancellationToken);
+        var retention = TimeSpan.FromDays(days);
+        var preview = await pricingLifecycleService.GetStalePricingCountsAsync(retention, cancellationToken);
+        var isDryRun = dryRun ?? true;
+
+        if (isDryRun)
+        {
+            return Results.Ok(new
+            {
+                dryRun = true,
+                preview.NegotiatedRatesCount,
+                preview.CashPricesCount,
+                retentionDays = days,
+                traceId = httpContext.TraceIdentifier
+            });
+        }
+
+        if (!(confirm ?? false))
+        {
+            return Results.BadRequest(new ProblemDetails
+            {
+                Title = "Confirmation required",
+                Detail = "Set confirm=true when dryRun=false to execute deletion.",
+                Status = StatusCodes.Status400BadRequest,
+                Instance = httpContext.TraceIdentifier
+            });
+        }
+
+        var deleted = await pricingLifecycleService.CleanupStalePricingAsync(retention, cancellationToken);
         return Results.Ok(new
         {
+            dryRun = false,
             deleted.NegotiatedRatesDeleted,
             deleted.CashPricesDeleted,
+            preview.NegotiatedRatesCount,
+            preview.CashPricesCount,
             retentionDays = days,
             traceId = httpContext.TraceIdentifier
         });

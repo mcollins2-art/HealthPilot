@@ -61,7 +61,10 @@ public static class EstimateEndpoints
             CashPriceMax = pricing.CashMax,
             CashPriceRange = pricingQueryService.FormatRange(pricing.CashMin, pricing.CashMax),
             InsurerPaymentEstimate = simulation.InsurerPayment,
-            RoundingMode = MonetaryPolicy.RoundingMode.ToString()
+            RoundingMode = MonetaryPolicy.RoundingMode.ToString(),
+            MatchedFacilityCount = $"{pricing.MatchedFacilityCount} facilities matched",
+            MatchedInsurer = pricing.MatchedInsurer ?? "No negotiated insurer match",
+            DataAsOfDate = pricing.DataAsOfDate
         };
 
         return Results.Ok(response);

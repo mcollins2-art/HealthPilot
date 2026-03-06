@@ -199,6 +199,9 @@ public class PricingIngestionPipeline(
             InsurerName = Normalizers.NormalizeInsurerName(GetValue(row, "insurer")),
             NegotiatedRate = ParseDecimal(GetValue(row, "negotiated_rate")),
             NegotiatedRateType = GetValue(row, "rate_type"),
+            PolicyVersion = GetNullableValue(row, "policy_version"),
+            EffectiveStartUtc = ParseDateTimeOffset(GetValue(row, "effective_start_utc")),
+            EffectiveEndUtc = ParseDateTimeOffset(GetValue(row, "effective_end_utc")),
             CashPrice = ParseDecimal(GetValue(row, "cash_price")),
             LastUpdated = DateTimeOffset.UtcNow
         };
@@ -212,6 +215,21 @@ public class PricingIngestionPipeline(
     private static decimal? ParseDecimal(string value)
     {
         return decimal.TryParse(value, out var parsed) ? parsed : null;
+    }
+
+    private static string? GetNullableValue(Dictionary<string, string> row, string key)
+    {
+        if (!row.TryGetValue(key, out var value))
+        {
+            return null;
+        }
+
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static DateTimeOffset? ParseDateTimeOffset(string value)
+    {
+        return DateTimeOffset.TryParse(value, out var parsed) ? parsed : null;
     }
 
     private static void MergeResult(PricingPersistenceResult aggregate, PricingPersistenceResult batchResult)

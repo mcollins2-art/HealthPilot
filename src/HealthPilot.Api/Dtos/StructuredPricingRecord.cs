@@ -15,6 +15,9 @@ public class StructuredPricingRecord
     public string? InsurerName { get; set; }
     public decimal? NegotiatedRate { get; set; }
     public string? NegotiatedRateType { get; set; }
+    public string? PolicyVersion { get; set; }
+    public DateTimeOffset? EffectiveStartUtc { get; set; }
+    public DateTimeOffset? EffectiveEndUtc { get; set; }
     public decimal? CashPrice { get; set; }
     public DateTimeOffset LastUpdated { get; set; }
 }

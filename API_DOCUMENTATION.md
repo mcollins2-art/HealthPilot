@@ -75,6 +75,7 @@ Response body:
 - Allowed extensions: `.csv`, `.json`
 - Optional path guard: `Ingestion:AllowedRootPath`
 - Batch processing: enabled with `Ingestion:BatchSize` (default `5000`)
+- Retry policy: `Ingestion:MaxAttempts` controls queued job retry attempts (default `2`, minimum `1`)
 - Streaming behavior: both CSV and JSON imports are processed as streaming batches to reduce peak memory usage
 - Checkpoint/resume: import progress is checkpointed and can resume from last processed row
 - Async control plane: set `async: true` to enqueue a background ingestion job
@@ -114,7 +115,8 @@ Response body:
 - Purpose: list recent checkpoints for operations visibility.
 - Auth scope: `ingestion:write`
 - Query param: `limit` (optional, default `20`, min `1`, max `200`)
-- Retention: expired checkpoints are automatically cleaned based on `Ingestion:CheckpointRetentionHours`
+- Note: this endpoint is read-only and does not perform cleanup.
+- Retention cleanup is executed explicitly via `POST /ingestion/checkpoints/cleanup`.
 
 Response body:
 ```json
@@ -181,14 +183,20 @@ Async response:
 ### `GET /ingestion/jobs/{jobId}`
 - Purpose: get queued/in-progress/completed/dead-letter ingestion job state and provenance metadata.
 - Auth scope: `ingestion:write`
+- Tenant behavior: if request includes a tenant context, only jobs for that tenant are visible.
 
 ### `POST /ingestion/jobs/{jobId}/replay`
 - Purpose: enqueue a deterministic replay job using the same source file and provenance metadata from a prior job.
 - Auth scope: `ingestion:write`
+- Tenant behavior: if request includes a tenant context, replay is allowed only for jobs in the same tenant.
 
-### `POST /ingestion/pricing/cleanup?retentionDays=365`
+### `POST /ingestion/pricing/cleanup?retentionDays=365&dryRun=true`
 - Purpose: lifecycle cleanup for stale negotiated/cash pricing rows.
 - Auth scope: `ingestion:write`
+- Behavior:
+  - `dryRun=true` (default): returns stale row counts without deleting data.
+  - `dryRun=false&confirm=true`: executes deletion and returns deleted counts.
+  - `dryRun=false` without `confirm=true`: returns `400` validation error.
 
 ## Error model
 - `401`: missing or invalid API key.

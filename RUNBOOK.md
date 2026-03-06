@@ -40,6 +40,22 @@ $body = @{ filePath = "C:\\data\\cms-pricing.csv" } | ConvertTo-Json
 Invoke-RestMethod -Uri "http://localhost:5000/ingestion/import" -Method Post -Headers $headers -ContentType "application/json" -Body $body
 ```
 
+Operational notes:
+- `GET /ingestion/checkpoints` is read-only (it no longer deletes expired checkpoints).
+- Use `POST /ingestion/checkpoints/cleanup` for explicit retention cleanup actions.
+- Configure `Ingestion:MaxAttempts` to tune queued job retry attempts (minimum `1`, default `2`).
+
+### 3.3 Pricing lifecycle cleanup (safe by default)
+```powershell
+$headers = @{ "X-API-Key" = "<ingestion-key>" }
+
+# Preview only (default dry run)
+Invoke-RestMethod -Uri "http://localhost:5000/ingestion/pricing/cleanup?retentionDays=365" -Method Post -Headers $headers
+
+# Execute delete (explicit confirm required)
+Invoke-RestMethod -Uri "http://localhost:5000/ingestion/pricing/cleanup?retentionDays=365&dryRun=false&confirm=true" -Method Post -Headers $headers
+```
+
 ## 4) Troubleshooting
 ### 4.1 `500` with `relation "estimate_audit_logs" does not exist`
 Cause: DB schema behind migrations.
@@ -63,6 +79,17 @@ Cause: API key scope missing for endpoint.
 Required scopes:
 - `/estimate`: `estimate:read`
 - `/ingestion/import`: `ingestion:write`
+
+Note:
+- Legacy single-key mode (`Security:ApiKey`) is read-only by default (`estimate:read`).
+- To temporarily grant broader access while migrating to scoped keys, configure `Security:LegacyKeyScopes`.
+
+### 4.4 Async jobs appear stuck in `queued`
+Cause: service restarted while jobs were queued in DB.
+
+Behavior:
+- On startup, HealthPilot re-enqueues persisted `queued` ingestion jobs automatically.
+- If database is unavailable at startup, recovery is skipped and logged as a warning; jobs remain in DB and will recover on next successful startup.
 
 ## 5) Validation commands
 ### Unit tests
@@ -98,6 +125,7 @@ cd backend
 ## 6) Security checklist (pilot)
 - `Security:ApiKey` OR `Security:ApiKeys` configured in non-development.
 - Distinct scoped keys per client/integration.
+- Legacy single-key mode only used for migration and explicitly scoped via `Security:LegacyKeyScopes` when needed.
 - No production secrets committed to source control.
 - `Ingestion:AllowedRootPath` configured where ingestion endpoint is enabled.
 - Swagger/OpenAPI auth bypass only allowed in development environment.

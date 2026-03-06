@@ -26,6 +26,7 @@ dotnet run --project .\src\HealthPilot.Api\HealthPilot.Api.csproj --urls "http:/
 - API key header: `X-API-Key` (configurable via `Security:ApiKeyHeader`).
 - Non-development startup requires either `Security:ApiKey` or `Security:ApiKeys`.
 - Scoped API keys are supported via `Security:ApiKeys`.
+- Legacy `Security:ApiKey` defaults to `estimate:read` only. To grant additional scopes during migration, set `Security:LegacyKeyScopes`.
 - Endpoint scopes:
   - `/estimate` requires `estimate:read`
   - `/ingestion/import` requires `ingestion:write`
@@ -36,6 +37,7 @@ Example scoped key config:
 ```json
 "Security": {
   "ApiKeyHeader": "X-API-Key",
+  "LegacyKeyScopes": ["estimate:read"],
   "ApiKeys": [
     { "name": "estimate-client", "key": "replace-estimate-key", "scopes": ["estimate:read"] },
     { "name": "ingestion-worker", "key": "replace-ingestion-key", "scopes": ["ingestion:write"] }
@@ -56,6 +58,36 @@ Example scoped key config:
 
 - Imports use streaming batch persistence (`Ingestion:BatchSize`, default `5000`) for both CSV and JSON files to reduce peak memory pressure.
 - Checkpoint/resume is supported for batched imports with durable DB-backed checkpoints; use `resumeFromCheckpoint` in request payload.
+
+## Data Pipeline Components (C#)
+
+The repository includes C# data pipeline components under `src/HealthPilot.Api/data_pipeline/`:
+
+- `downloader.cs` - resilient HTTP downloader with streaming writes, progress logging, and retry handling.
+- `link_discoverer.cs` - finds machine-readable `.csv`/`.json` transparency file links from hospital transparency pages.
+- `hospital_transparency_ingestion.cs` - orchestrates discovery + download into `data/` and parses CPT-coded negotiated/cash prices.
+- `parser.cs` - streaming CSV/JSON parser that extracts:
+  - `hospital_name`
+  - `payer`
+  - `procedure_code` (CPT)
+  - `procedure_description`
+  - `negotiated_rate`
+  - `cash_price`
+  - `location`
+- `normalizer.cs` - CPT normalization and procedure categorization helpers.
+- `loader.cs` - batched loader that creates `providers`, `procedures`, and `rates` tables, handles duplicate upserts, and logs ingestion errors.
+
+Sample hospital transparency data files are committed under `data/`:
+
+- `mount_sinai_sample.csv`
+- `nyu_langone_sample.csv`
+- `hackensack_meridian_sample.csv`
+
+Run focused tests for these components with:
+
+```powershell
+dotnet test tests/HealthPilot.Api.Tests/HealthPilot.Api.Tests.csproj --filter "DataPipelineComponentsTests"
+```
 
 ## Load Testing
 
