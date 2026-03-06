@@ -245,6 +245,92 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Replay_ReturnsNotFound_ForMissingJob()
+    {
+        var replayResponse = await _client.PostAsync("/ingestion/jobs/999999/replay", null);
+
+        Assert.Equal(HttpStatusCode.NotFound, replayResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task JobStatus_ReturnsNotFound_WhenTenantDoesNotMatch()
+    {
+        var csv = Path.Combine(_tempDirectory, "tenant-job-status.csv");
+        await File.WriteAllTextAsync(csv,
+            "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price\n" +
+            "70551,Brain MRI,imaging,Test Hospital,hospital,Hoboken,NJ,07030,Plan A,1200,contracted,950");
+
+        using var tenantFactory = CreateFactory(new Dictionary<string, string?>
+        {
+            ["Security:ApiKeys:0:Name"] = "tenant-client",
+            ["Security:ApiKeys:0:Key"] = "tenant-key",
+            ["Security:ApiKeys:0:Scopes:0"] = "ingestion:write",
+            ["Security:ApiKeys:0:Tenants:0"] = "tenant-a",
+            ["Security:ApiKeys:0:Tenants:1"] = "tenant-b"
+        });
+
+        using var tenantClient = tenantFactory.CreateClient();
+        tenantClient.DefaultRequestHeaders.Add("X-API-Key", "tenant-key");
+        tenantClient.DefaultRequestHeaders.Add("X-Tenant-Id", "tenant-a");
+
+        var importResponse = await tenantClient.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
+        {
+            FilePath = csv,
+            BatchSize = 100,
+            ResumeFromCheckpoint = false
+        });
+        importResponse.EnsureSuccessStatusCode();
+
+        var importPayload = await importResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var jobId = importPayload.GetProperty("jobId").GetInt64();
+
+        tenantClient.DefaultRequestHeaders.Remove("X-Tenant-Id");
+        tenantClient.DefaultRequestHeaders.Add("X-Tenant-Id", "tenant-b");
+
+        var statusResponse = await tenantClient.GetAsync($"/ingestion/jobs/{jobId}");
+        Assert.Equal(HttpStatusCode.NotFound, statusResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Replay_ReturnsNotFound_WhenTenantDoesNotMatch()
+    {
+        var csv = Path.Combine(_tempDirectory, "tenant-replay.csv");
+        await File.WriteAllTextAsync(csv,
+            "cpt_code,description,category,facility_name,facility_type,city,state,zip,insurer,negotiated_rate,rate_type,cash_price\n" +
+            "70551,Brain MRI,imaging,Test Hospital,hospital,Hoboken,NJ,07030,Plan A,1200,contracted,950");
+
+        using var tenantFactory = CreateFactory(new Dictionary<string, string?>
+        {
+            ["Security:ApiKeys:0:Name"] = "tenant-client",
+            ["Security:ApiKeys:0:Key"] = "tenant-key",
+            ["Security:ApiKeys:0:Scopes:0"] = "ingestion:write",
+            ["Security:ApiKeys:0:Tenants:0"] = "tenant-a",
+            ["Security:ApiKeys:0:Tenants:1"] = "tenant-b"
+        });
+
+        using var tenantClient = tenantFactory.CreateClient();
+        tenantClient.DefaultRequestHeaders.Add("X-API-Key", "tenant-key");
+        tenantClient.DefaultRequestHeaders.Add("X-Tenant-Id", "tenant-a");
+
+        var importResponse = await tenantClient.PostAsJsonAsync("/ingestion/import", new IngestionImportRequest
+        {
+            FilePath = csv,
+            BatchSize = 100,
+            ResumeFromCheckpoint = false
+        });
+        importResponse.EnsureSuccessStatusCode();
+
+        var importPayload = await importResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var jobId = importPayload.GetProperty("jobId").GetInt64();
+
+        tenantClient.DefaultRequestHeaders.Remove("X-Tenant-Id");
+        tenantClient.DefaultRequestHeaders.Add("X-Tenant-Id", "tenant-b");
+
+        var replayResponse = await tenantClient.PostAsync($"/ingestion/jobs/{jobId}/replay", null);
+        Assert.Equal(HttpStatusCode.NotFound, replayResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task Import_ReturnsOk_WhenBatchSizeUsesConfiguredDefault()
     {
         var csv = Path.Combine(_tempDirectory, "default-batch.csv");

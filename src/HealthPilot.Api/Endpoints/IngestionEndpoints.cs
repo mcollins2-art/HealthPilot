@@ -323,11 +323,18 @@ public static class IngestionEndpoints
     private static async Task<IResult> HandleJobStatusAsync(
         long jobId,
         AppDbContext dbContext,
+        HttpContext httpContext,
         CancellationToken cancellationToken)
     {
+        var requestTenant = httpContext.Items.TryGetValue("TenantId", out var tenantId)
+            ? tenantId?.ToString()
+            : null;
+
         var job = await dbContext.IngestionJobs
             .AsNoTracking()
-            .SingleOrDefaultAsync(x => x.Id == jobId, cancellationToken);
+            .SingleOrDefaultAsync(
+                x => x.Id == jobId && (requestTenant == null || x.TenantId == requestTenant),
+                cancellationToken);
         return job is null ? Results.NotFound() : Results.Ok(job);
     }
 
@@ -335,9 +342,16 @@ public static class IngestionEndpoints
         long jobId,
         AppDbContext dbContext,
         IIngestionJobQueue jobQueue,
+        HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var sourceJob = await dbContext.IngestionJobs.SingleOrDefaultAsync(x => x.Id == jobId, cancellationToken);
+        var requestTenant = httpContext.Items.TryGetValue("TenantId", out var tenantId)
+            ? tenantId?.ToString()
+            : null;
+
+        var sourceJob = await dbContext.IngestionJobs.SingleOrDefaultAsync(
+            x => x.Id == jobId && (requestTenant == null || x.TenantId == requestTenant),
+            cancellationToken);
         if (sourceJob is null)
         {
             return Results.NotFound();
