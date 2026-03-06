@@ -23,12 +23,7 @@ public sealed class IngestionJobQueue : IIngestionJobQueue
         }
     }
 
-    public ValueTask<long> DequeueAsync(CancellationToken cancellationToken)
-    {
-        return DequeueAndTrackAsync(cancellationToken);
-    }
-
-    private async ValueTask<long> DequeueAndTrackAsync(CancellationToken cancellationToken)
+    public async ValueTask<long> DequeueAsync(CancellationToken cancellationToken)
     {
         var jobId = await _channel.Reader.ReadAsync(cancellationToken);
         Interlocked.Decrement(ref _pendingCount);

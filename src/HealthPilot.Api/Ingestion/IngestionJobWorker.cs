@@ -21,8 +21,6 @@ public sealed class IngestionJobWorker(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _ = _queueDepthGauge;
-
         while (!stoppingToken.IsCancellationRequested)
         {
             long jobId;
