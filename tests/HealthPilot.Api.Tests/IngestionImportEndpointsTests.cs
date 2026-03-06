@@ -19,6 +19,8 @@ namespace HealthPilot.Api.Tests;
 
 public class IngestionImportEndpointsTests : IAsyncLifetime
 {
+    private const long NonExistentJobId = 999999;
+    private const string TenantApiKey = "tenant-key";
     private string _tempDirectory = string.Empty;
     private ImportWebFactory _factory = null!;
     private HttpClient _client = null!;
@@ -247,7 +249,7 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task Replay_ReturnsNotFound_ForMissingJob()
     {
-        var replayResponse = await _client.PostAsync("/ingestion/jobs/999999/replay", null);
+        var replayResponse = await _client.PostAsync($"/ingestion/jobs/{NonExistentJobId}/replay", null);
 
         Assert.Equal(HttpStatusCode.NotFound, replayResponse.StatusCode);
     }
@@ -350,7 +352,7 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
         return CreateFactory(new Dictionary<string, string?>
         {
             ["Security:ApiKeys:0:Name"] = "tenant-client",
-            ["Security:ApiKeys:0:Key"] = "tenant-key",
+            ["Security:ApiKeys:0:Key"] = TenantApiKey,
             ["Security:ApiKeys:0:Scopes:0"] = "ingestion:write",
             ["Security:ApiKeys:0:Tenants:0"] = "tenant-a",
             ["Security:ApiKeys:0:Tenants:1"] = "tenant-b"
@@ -360,7 +362,7 @@ public class IngestionImportEndpointsTests : IAsyncLifetime
     private static HttpClient CreateTenantClient(WebApplicationFactory<Program> factory, string tenantId)
     {
         var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Add("X-API-Key", "tenant-key");
+        client.DefaultRequestHeaders.Add("X-API-Key", TenantApiKey);
         client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId);
         return client;
     }
