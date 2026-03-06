@@ -40,6 +40,17 @@ $body = @{ filePath = "C:\\data\\cms-pricing.csv" } | ConvertTo-Json
 Invoke-RestMethod -Uri "http://localhost:5000/ingestion/import" -Method Post -Headers $headers -ContentType "application/json" -Body $body
 ```
 
+### 3.3 Pricing lifecycle cleanup (safe by default)
+```powershell
+$headers = @{ "X-API-Key" = "<ingestion-key>" }
+
+# Preview only (default dry run)
+Invoke-RestMethod -Uri "http://localhost:5000/ingestion/pricing/cleanup?retentionDays=365" -Method Post -Headers $headers
+
+# Execute delete (explicit confirm required)
+Invoke-RestMethod -Uri "http://localhost:5000/ingestion/pricing/cleanup?retentionDays=365&dryRun=false&confirm=true" -Method Post -Headers $headers
+```
+
 ## 4) Troubleshooting
 ### 4.1 `500` with `relation "estimate_audit_logs" does not exist`
 Cause: DB schema behind migrations.
@@ -63,6 +74,13 @@ Cause: API key scope missing for endpoint.
 Required scopes:
 - `/estimate`: `estimate:read`
 - `/ingestion/import`: `ingestion:write`
+
+### 4.4 Async jobs appear stuck in `queued`
+Cause: service restarted while jobs were queued in DB.
+
+Behavior:
+- On startup, HealthPilot re-enqueues persisted `queued` ingestion jobs automatically.
+- If database is unavailable at startup, recovery is skipped and logged as a warning; jobs remain in DB and will recover on next successful startup.
 
 ## 5) Validation commands
 ### Unit tests

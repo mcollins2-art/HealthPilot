@@ -181,14 +181,20 @@ Async response:
 ### `GET /ingestion/jobs/{jobId}`
 - Purpose: get queued/in-progress/completed/dead-letter ingestion job state and provenance metadata.
 - Auth scope: `ingestion:write`
+- Tenant behavior: if request includes a tenant context, only jobs for that tenant are visible.
 
 ### `POST /ingestion/jobs/{jobId}/replay`
 - Purpose: enqueue a deterministic replay job using the same source file and provenance metadata from a prior job.
 - Auth scope: `ingestion:write`
+- Tenant behavior: if request includes a tenant context, replay is allowed only for jobs in the same tenant.
 
-### `POST /ingestion/pricing/cleanup?retentionDays=365`
+### `POST /ingestion/pricing/cleanup?retentionDays=365&dryRun=true`
 - Purpose: lifecycle cleanup for stale negotiated/cash pricing rows.
 - Auth scope: `ingestion:write`
+- Behavior:
+  - `dryRun=true` (default): returns stale row counts without deleting data.
+  - `dryRun=false&confirm=true`: executes deletion and returns deleted counts.
+  - `dryRun=false` without `confirm=true`: returns `400` validation error.
 
 ## Error model
 - `401`: missing or invalid API key.

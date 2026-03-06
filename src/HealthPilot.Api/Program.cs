@@ -34,6 +34,7 @@ builder.Services.AddScoped<IPricingLifecycleService, PricingLifecycleService>();
 builder.Services.AddScoped<PricingIngestionPipeline>();
 builder.Services.AddScoped<IIngestionCheckpointService, DbIngestionCheckpointService>();
 builder.Services.AddSingleton<IIngestionJobQueue, IngestionJobQueue>();
+builder.Services.AddHostedService<IngestionJobStartupRecoveryService>();
 builder.Services.AddHostedService<IngestionJobWorker>();
 
 builder.Services.AddRateLimiter(options =>

@@ -388,6 +388,8 @@ public static class IngestionEndpoints
 
     private static async Task<IResult> HandlePricingCleanupAsync(
         [FromQuery] int? retentionDays,
+        [FromQuery] bool? dryRun,
+        [FromQuery] bool? confirm,
         IPricingLifecycleService pricingLifecycleService,
         HttpContext httpContext,
         CancellationToken cancellationToken)
@@ -404,11 +406,41 @@ public static class IngestionEndpoints
             });
         }
 
-        var deleted = await pricingLifecycleService.CleanupStalePricingAsync(TimeSpan.FromDays(days), cancellationToken);
+        var retention = TimeSpan.FromDays(days);
+        var preview = await pricingLifecycleService.GetStalePricingCountsAsync(retention, cancellationToken);
+        var isDryRun = dryRun ?? true;
+
+        if (isDryRun)
+        {
+            return Results.Ok(new
+            {
+                dryRun = true,
+                preview.NegotiatedRatesCount,
+                preview.CashPricesCount,
+                retentionDays = days,
+                traceId = httpContext.TraceIdentifier
+            });
+        }
+
+        if (!(confirm ?? false))
+        {
+            return Results.BadRequest(new ProblemDetails
+            {
+                Title = "Confirmation required",
+                Detail = "Set confirm=true when dryRun=false to execute deletion.",
+                Status = StatusCodes.Status400BadRequest,
+                Instance = httpContext.TraceIdentifier
+            });
+        }
+
+        var deleted = await pricingLifecycleService.CleanupStalePricingAsync(retention, cancellationToken);
         return Results.Ok(new
         {
+            dryRun = false,
             deleted.NegotiatedRatesDeleted,
             deleted.CashPricesDeleted,
+            preview.NegotiatedRatesCount,
+            preview.CashPricesCount,
             retentionDays = days,
             traceId = httpContext.TraceIdentifier
         });
