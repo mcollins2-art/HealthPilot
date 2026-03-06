@@ -18,4 +18,10 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
     <PackageReference Include="CsvHelper" Version="33.0.1" />
   </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>HealthPilot.Api.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
 </Project>

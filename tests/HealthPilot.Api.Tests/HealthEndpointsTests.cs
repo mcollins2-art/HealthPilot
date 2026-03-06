@@ -117,8 +117,14 @@ public class HealthEndpointsTests : IDisposable
             {
                 webBuilder.ConfigureTestServices(services =>
                 {
+                    // AddDbContextPool registers DbContextOptions as singleton; replace it
+                    // with a singleton pointing at the shared SQLite connection.
                     services.RemoveAll<DbContextOptions<AppDbContext>>();
-                    services.AddDbContext<AppDbContext>(options => options.UseSqlite(connection));
+                    services.RemoveAll<IDbContextFactory<AppDbContext>>();
+                    services.AddSingleton<DbContextOptions<AppDbContext>>(
+                        _ => new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options);
+                    services.AddSingleton<IDbContextFactory<AppDbContext>>(sp =>
+                        new TestDbContextFactory(sp.GetRequiredService<DbContextOptions<AppDbContext>>()));
                 });
             });
 
@@ -153,8 +159,13 @@ public class HealthEndpointsTests : IDisposable
                 webBuilder.ConfigureTestServices(services =>
                 {
                     services.RemoveAll<DbContextOptions<AppDbContext>>();
-                    services.AddDbContext<AppDbContext>(options =>
-                        options.UseInMemoryDatabase(Guid.NewGuid().ToString("N")));
+                    services.RemoveAll<IDbContextFactory<AppDbContext>>();
+                    services.AddSingleton<DbContextOptions<AppDbContext>>(
+                        _ => new DbContextOptionsBuilder<AppDbContext>()
+                            .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
+                            .Options);
+                    services.AddSingleton<IDbContextFactory<AppDbContext>>(sp =>
+                        new TestDbContextFactory(sp.GetRequiredService<DbContextOptions<AppDbContext>>()));
                 });
             });
 
@@ -172,8 +183,11 @@ public class HealthEndpointsTests : IDisposable
                 webBuilder.ConfigureTestServices(services =>
                 {
                     services.RemoveAll<DbContextOptions<AppDbContext>>();
-                    services.AddDbContext<AppDbContext>(options =>
-                        options.UseSqlite(connection));
+                    services.RemoveAll<IDbContextFactory<AppDbContext>>();
+                    services.AddSingleton<DbContextOptions<AppDbContext>>(
+                        _ => new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options);
+                    services.AddSingleton<IDbContextFactory<AppDbContext>>(sp =>
+                        new TestDbContextFactory(sp.GetRequiredService<DbContextOptions<AppDbContext>>()));
                 });
             });
 

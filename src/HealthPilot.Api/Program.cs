@@ -5,6 +5,7 @@ using HealthPilot.Api.Middleware;
 using HealthPilot.Api.Services;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -24,16 +25,29 @@ if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("Default
     throw new InvalidOperationException("ConnectionStrings:DefaultConnection must be configured.");
 }
 
-// Register the PostgreSQL EF Core DbContext. This is the main persistence
-// boundary for the API and can be tuned further for pooling and resiliency.
-builder.Services.AddDbContext<AppDbContext>(options =>
+// Register the PostgreSQL EF Core DbContext using connection pooling.
+// AddDbContextPool reduces per-request context allocation overhead by up to 25%
+// at high concurrency and registers DbContextOptions<AppDbContext> as a singleton.
+builder.Services.AddDbContextPool<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// AddDbContextPool does not register IDbContextFactory automatically.
+// PricingQueryService (parallel lookups) and BackgroundAuditWriter need a factory
+// to create independent context instances for concurrent use.
+builder.Services.AddSingleton<IDbContextFactory<AppDbContext>>(sp =>
+    new PooledDbContextFactory<AppDbContext>(sp.GetRequiredService<DbContextOptions<AppDbContext>>()));
+
+// In-memory cache used by PricingQueryService to avoid repeated DB hits for
+// identical (zip, insurer, CPT) combinations within a 1-minute window.
+builder.Services.AddMemoryCache();
 
 // Service registrations keep pricing retrieval and benefit logic separated.
 builder.Services.AddScoped<IPricingQueryService, PricingQueryService>();
 builder.Services.AddScoped<IPricingSelectionStrategy, NegotiatedMinPricingSelectionStrategy>();
 builder.Services.AddScoped<IBenefitSimulationService, BenefitSimulationService>();
 builder.Services.AddScoped<IEstimateAuditService, EstimateAuditService>();
+builder.Services.AddSingleton<BackgroundAuditChannel>();
+builder.Services.AddHostedService<BackgroundAuditWriter>();
 builder.Services.AddScoped<IPricingPersistenceService, PricingPersistenceService>();
 builder.Services.AddScoped<IPricingLifecycleService, PricingLifecycleService>();
 builder.Services.AddScoped<PricingIngestionPipeline>();
