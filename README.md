@@ -72,6 +72,7 @@ cd backend
 
 - API reference: `API_DOCUMENTATION.md`
 - Runbook: `RUNBOOK.md`
+- 6-week implementation plan: `HEALTHPILOT_6_WEEK_IMPLEMENTATION_PLAN.md`
 
 ## Structure
 
