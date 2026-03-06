@@ -12,6 +12,11 @@ This is the canonical backend for HealthPilot.
 - Benefit simulation engine
 - `POST /estimate` endpoint
 
+## Phase 2 Slice (In Progress)
+
+- Outpatient surgery estimate contract
+- `POST /outpatient-surgery/estimate` endpoint
+
 ## Run
 
 ```powershell
@@ -28,6 +33,7 @@ dotnet run --project .\src\HealthPilot.Api\HealthPilot.Api.csproj --urls "http:/
 - Scoped API keys are supported via `Security:ApiKeys`.
 - Endpoint scopes:
   - `/estimate` requires `estimate:read`
+  - `/outpatient-surgery/estimate` requires `outpatient-surgery:read`
   - `/ingestion/import` requires `ingestion:write`
 - Rate limiting is enabled and config-driven via `RateLimiting`.
 
@@ -48,6 +54,7 @@ Example scoped key config:
 - `GET /health` liveness probe.
 - `GET /health/ready` readiness probe (DB + pending migrations).
 - `POST /estimate` estimate endpoint.
+- `POST /outpatient-surgery/estimate` outpatient surgery estimate endpoint.
 - `POST /ingestion/import` ingestion endpoint (sync or async job queue via `async: true`).
 - `GET /ingestion/jobs/{jobId}` ingestion job lifecycle status.
 - `POST /ingestion/jobs/{jobId}/replay` deterministic replay enqueue.

@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<EstimateAuditLog> EstimateAuditLogs => Set<EstimateAuditLog>();
     public DbSet<IngestionCheckpoint> IngestionCheckpoints => Set<IngestionCheckpoint>();
     public DbSet<IngestionJob> IngestionJobs => Set<IngestionJob>();
+    public DbSet<OutpatientSurgeryProcedure> OutpatientSurgeryProcedures => Set<OutpatientSurgeryProcedure>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -47,6 +48,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Name).HasMaxLength(255).IsRequired();
             entity.HasIndex(x => x.Name).IsUnique();
+        });
+
+        modelBuilder.Entity<OutpatientSurgeryProcedure>(entity =>
+        {
+            entity.ToTable("outpatient_surgery_procedures");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.CptCode).HasMaxLength(10).IsRequired();
+            entity.Property(x => x.Description).IsRequired();
+            entity.HasIndex(x => x.CptCode).IsUnique();
         });
 
         modelBuilder.Entity<NegotiatedRate>(entity =>
