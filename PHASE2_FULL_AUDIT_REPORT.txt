@@ -279,3 +279,35 @@ P2 (Stability)
 9) CLOSING NOTE
 ====================================================================
 This audit identifies high-impact concerns primarily in multi-tenant boundary enforcement and asynchronous job durability. The system is functionally healthy (build/tests green) but requires these hardening steps to be production-grade under Phase 2 operational load and tenancy requirements.
+
+====================================================================
+10) PRE-PHASE 2 GATE RISKS (NEW)
+====================================================================
+[PG-001] No compliance review
+- Severity: High
+- Blocking for Phase 2: YES
+- Mitigation: Get legal sign-off before touching hospital data.
+
+[PG-002] Hospital file format diversity
+- Severity: Medium
+- Blocking for Phase 2: Not yet
+- Mitigation: Add 2-3 parsers for common hospital formats.
+
+[PG-003] No pricing accuracy validation
+- Severity: Medium
+- Blocking for Phase 2: Not yet
+- Mitigation: Build a Phase 1.5 comparison tool for pricing validation.
+
+Blocking for Phase 2
+- Claims data infrastructure missing
+  - Severity: High
+  - Blocker: YES
+  - Mitigation: Build schema + ingestion for claims before Phase 2.
+- Denial modeling not scoped
+  - Severity: Medium
+  - Blocker: Not yet
+  - Mitigation: Define denial-model features + data requirements in Q2.
+- Specialty drugs are a new domain
+  - Severity: Medium
+  - Blocker: Not yet
+  - Mitigation: Create a separate pricing model (specialty Rx is distinct from facility pricing).
