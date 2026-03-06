@@ -14,6 +14,7 @@ internal static class IngestionErrorFormatter
         }
 
         var maxPrefixLength = MaxErrorMessageLength - TruncatedSuffix.Length;
-        return $"{message[..maxPrefixLength]}{TruncatedSuffix}";
+        var safePrefixLength = Math.Min(Math.Max(maxPrefixLength, 0), message.Length);
+        return $"{message[..safePrefixLength]}{TruncatedSuffix}";
     }
 }
